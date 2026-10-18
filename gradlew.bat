@@ -1,0 +1,101 @@
+@rem
+@rem Copyright 2015 the original author or authors.
+@rem
+@rem Licensed under the Apache License, Version 2.0 (the "License");
+@rem you may not use this file except in compliance with the License.
+@rem You may obtain a copy of the License at
+@rem
+@rem      https://www.apache.org/licenses/LICENSE-2.0
+@rem
+@rem Unless required by applicable law or agreed to in writing, software
+@rem distributed under the License is distributed on an "AS IS" BASIS,
+@rem WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+@rem See the License for the specific language governing permissions and
+@rem limitations under the License.
+@rem
+
+@if "%DEBUG%"=="" @echo off
+@rem %DEBUG% cmd("echo *")
+@rem %DEBUG% cmd("echo")
+@rem %DEBUG% cmd("echo ...")
+
+setlocal EnableDelayedExpansion
+
+if NOT "%~f0"=="%~dp0" (
+    if exist "%~dp0%~nx0.bat" (
+        set "GRADLE_FILE=%~dp0%~nx0.bat"
+    ) else (
+        set "GRADLE_FILE=%~f0"
+    )
+) else (
+    set "GRADLE_FILE=%~f0"
+)
+
+set APP_HOME=%~dp0%
+
+set APP_NAME=Gradle
+set APP_BASE_NAME=%~n0
+
+set DEFAULT_JVM_OPTS="-Xmx64m"
+
+if not "%JAVA_HOME%"=="" goto findJavaFromJavaHome
+set JAVA_EXE=java.exe
+%JAVA_EXE% -version >NUL 2>&1
+if "%ERRORLEVEL%"=="0" goto init
+echo.
+echo ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+echo.
+echo Please set the JAVA_HOME variable in your environment to match the
+echo location of your Java installation.
+goto fail
+
+:findJavaFromJavaHome
+set JAVA_HOME=%JAVA_HOME:"=%
+set JAVA_EXE=%JAVA_HOME%/bin/java.exe
+if exist "%JAVA_EXE%" goto init
+echo.
+echo ERROR: JAVA_HOME is set to an invalid directory: %JAVA_HOME%
+echo.
+echo Please set the JAVA_HOME variable in your environment to match the
+echo location of your Java installation.
+goto fail
+
+:init
+rem Get command-line arguments, handling Windowz variants
+if not "%OS%"=="Windows_NT" goto win9xME_args
+:win9xME_args
+rem Slurp the command line arguments.
+set CMD_LINE_ARGS=
+set _SKIP=2
+
+:win9xME_args_slurp
+if "x%~1"=="x" goto execute
+set CMD_LINE_ARGS=%*
+goto execute
+
+:execute
+rem Setup the command line
+set CLASSPATH=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar
+
+rem Execute Gradle
+"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" org.gradle.wrapper.GradleWrapperMain %CMD_LINE_ARGS%
+
+:end
+rem End local scope.
+endlocal & set ERRORLEVEL=%ERRORLEVEL%
+
+if %ERRORLEVEL% NEQ 0 goto fail
+
+goto end
+
+:fail
+rem Set variable GRADLE_EXIT_CONSOLE if you need the _script_ return code instead of
+rem the _cmd.exe /c_ return code.
+set EXIT_CODE=%ERRORLEVEL%
+if %EXIT_CODE% LEQ 0 set EXIT_CODE=1
+goto end
+
+:fail
+echo.
+echo ERROR: %EXIT_CODE%
+goto end
