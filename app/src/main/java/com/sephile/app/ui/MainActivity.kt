@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.sephile.app.di.Module
+import com.sephile.app.repository.LuaRepository
 import com.sephile.app.repository.MemoryRepository
 import com.sephile.app.repository.ProcessRepository
 import com.sephile.app.repository.LuaRepository
@@ -34,7 +35,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             SephileTheme(darkTheme = true) {
                 forceSephileColors()
-                var showRootCheck by rememberSaveable { mutableStateOf(!RootManager.isRootAvailable()) }
+                var showRootCheck by rememberSaveable { mutableStateOf<Boolean>(!RootManager.isRootAvailable()) }
 
                 if (showRootCheck) {
                     RootGate(onRootConfirmed = { showRootCheck = false })

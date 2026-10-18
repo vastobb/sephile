@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
@@ -22,9 +23,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
-import androidx.lifecycle.MutableStateFlow
-import androidx.lifecycle.StateFlow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Live Memory Inspector ("offset finder").
@@ -40,8 +41,8 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
-    val addressState = remember { mutableStateOf("") }
-    val lengthState = remember { mutableStateOf("64") }
+    val addressState = remember { mutableStateOf<String>("") }
+    val lengthState = remember { mutableStateOf<String>("64") }
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
         TopAppBar(
