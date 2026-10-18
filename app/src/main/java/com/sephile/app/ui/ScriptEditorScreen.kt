@@ -83,7 +83,7 @@ fun ScriptEditorScreen(luaRepo: LuaRepository) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                if (viewModel.error.isNotEmpty()) {
+                if (viewModel.error != null && viewModel.error.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = viewModel.error,
