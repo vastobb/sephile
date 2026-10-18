@@ -1,8 +1,10 @@
 package com.sephile.app.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
@@ -35,7 +37,7 @@ fun ScriptEditorScreen(luaRepo: LuaRepository) {
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        OutlinedTextField(
+        BasicTextField(
             value = script,
             onValueChange = { script = it },
             modifier = Modifier.fillMaxWidth().weight(1f),
