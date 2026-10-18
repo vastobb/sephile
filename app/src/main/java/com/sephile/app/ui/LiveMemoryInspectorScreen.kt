@@ -22,8 +22,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectAsState
 import kotlinx.coroutines.flow.update
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
  * Live Memory Inspector ("offset finder").
@@ -37,7 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
     val viewModel = remember { LiveMemoryInspectorViewModel(repo) }
     val ui: StateFlow<LiveMemoryInspectorUiState> = viewModel.ui
-    val uiState by ui.collectAsStateWithLifecycle()
+    val uiState by ui.collectAsState()
     val scope = rememberCoroutineScope()
 
     val addressState = remember { mutableStateOf<String>("") }

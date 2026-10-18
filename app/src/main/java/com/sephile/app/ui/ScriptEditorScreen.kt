@@ -3,73 +3,46 @@ package com.sephile.app.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.FontFamily
-import androidx.compose.ui.unit.dp
-import com.sephile.app.repository.LuaRepository
-import com.sephile.app.viewmodel.LuaViewModel
-import kotlinx.coroutines.launch
+import com.sephile.app.root.LuaRepository
 
 @Composable
-fun ScriptEditorScreen(luaRepo: com.sephile.app.repository.LuaRepository) {
-    // This screen is instantiated via MainActivity with a real LuaViewModel.
-    ScriptEditorContent(viewModel = remember { com.sephile.app.viewmodel.LuaViewModel(luaRepo) })
-}
-
-@Composable
-private fun ScriptEditorContent(viewModel: LuaViewModel) {
-    val ui by collectAsStateWithLifecycle(viewModel.ui)
+fun ScriptEditorScreen(luaRepo: LuaRepository) {
+    val viewModel = remember { LuaViewModel(luaRepo) }
+    val ui by viewModel.ui.collectAsState()
     val scope = rememberCoroutineScope()
 
-    val script by remember { mutableStateOf("""
--- Sephile Lua example (engine not yet bound --)
--- print("hello from sephile")
--- attach(1234)
--- scan(100, "dword")
-""".trimIndent()) }
+    var script by remember { mutableStateOf("") }
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
-        TopAppBar(
+        androidx.compose.material3.TopAppBar(
             title = { Text(text = "Lua Scripts") },
-            navigationIcon = {
-                IconButton(onClick = { /* back handled by nav */ }) {
-                    Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Default.ArrowBack,
-                        contentDescription = "Back"
-                    )
-                }
-            },
-            colors = TopAppBarDefaults.mediumTopAppBarColors(containerColor = Color.Transparent)
+            colors = androidx.compose.material3.TopAppBarDefaults.mediumTopAppBarColors(
+                containerColor = Color.Transparent
+            )
         )
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = if (ui.loaded) "Lua engine loaded" else "Lua engine: stub (not bound)",
+            text = if (ui.loaded) "Lua engine loaded" else "Lua engine: stub",
             style = MaterialTheme.typography.bodyMedium,
             color = if (ui.loaded) Color(0xFF50FA7B) else Color(0xFFFFB86C)
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        BasicTextField(
-            value = androidx.compose.ui.text.input.TextFieldValue(script),
-            onValueChange = { script = it.text },
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .background(Color(0xFF121826)),
-            colors = TextFieldDefaults.textFieldColors(
-                containerColor = Color(0xFF121826),
-                focusedContainerColor = Color(0xFF121826)
-            ),
-            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                imeAction = androidx.compose.foundation.text.ImeAction.Done
-            )
+        OutlinedTextField(
+            value = script,
+            onValueChange = { script = it },
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            label = { Text(text = "Lua script") }
         )
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -111,8 +84,7 @@ private fun ScriptEditorContent(viewModel: LuaViewModel) {
                 Text(
                     text = if (ui.output.isNotEmpty()) ui.output else "(no output yet)",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontFamily = FontFamily.Monospace
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 ui.error?.let { err ->
                     Spacer(modifier = Modifier.height(8.dp))
@@ -126,3 +98,33 @@ private fun ScriptEditorContent(viewModel: LuaViewModel) {
         }
     }
 }
+
+class LuaViewModel(private val repo: com.sephile.app.repository.LuaRepository) {
+
+    private val _ui = MutableStateFlow(LuaUiState(loaded = repo.isLoaded()))
+    val ui: StateFlow<LuaUiState> = _ui.asStateFlow()
+
+    fun runScript(script: String) {
+        _ui.update { it.copy(isRunning = true, error = null, output = "") }
+        val result = repo.exec(script)
+        _ui.update {
+            it.copy(
+                isRunning = false,
+                output = result,
+                error = if (result.contains("not bound") || result.contains("not initialized"))
+                    "Lua engine not enabled" else null
+            )
+        }
+    }
+
+    fun clearOutput() {
+        _ui.update { it.copy(output = "", error = null) }
+    }
+}
+
+data class LuaUiState(
+    val loaded: Boolean = false,
+    val isRunning: Boolean = false,
+    val output: String = "",
+    val error: String? = null
+)

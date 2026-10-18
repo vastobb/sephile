@@ -1,21 +1,18 @@
 package com.sephile.app.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.*
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import com.sephile.app.model.SearchType
-import com.sephile.app.model.ValueType
 import com.sephile.app.repository.MemoryRepository
-import kotlinx.coroutines.launch
 
 @Composable
 fun ScannerScreen(
@@ -24,38 +21,23 @@ fun ScannerScreen(
     targetName: String,
     onBack: () -> Unit
 ) {
-    val ui by remember { mutableStateOf(com.sephile.app.viewmodel.ScannerUiState()) }
-
-    // Note: In a production build this screen would observe a ViewModel StateFlow.
-    // Here we wire directly to MemoryRepository for the MVP.
     val scope = rememberCoroutineScope()
+    var refresh by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
-        TopAppBar(
+        androidx.compose.material3.TopAppBar(
             title = { Text(text = "Scanner") },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Default.ArrowBack,
-                        contentDescription = "Back"
-                    )
-                }
-            },
-            colors = TopAppBarDefaults.mediumTopAppBarColors(
+            colors = androidx.compose.material3.TopAppBarDefaults.mediumTopAppBarColors(
                 containerColor = Color.Transparent
             )
         )
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Target chip
-        val attached = ui.attached
+        val attached = repo.isAttached()
         val targetText = if (attached) "Attached: $targetName (PID $targetPid)" else "Not attached"
         Chip(
             modifier = Modifier.fillMaxWidth(),
             onClick = null,
-            colors = ChipDefaults.colors(
-                containerColor = if (attached) Color(0xFF2E5E00) else Color(0xFF3A1E1E)
-            ),
             label = {
                 Text(
                     text = targetText,
@@ -66,11 +48,10 @@ fun ScannerScreen(
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Controls card
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            elevation = 4.dp
+            elevation = 0.dp
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row {
@@ -80,18 +61,6 @@ fun ScannerScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.weight(1f))
-                    DropdownMenu(
-                        expanded = true,
-                        onDismissRequest = {},
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        ValueType.values().forEach { vt ->
-                            DropdownMenuItem(
-                                text = { Text(text = vt.label) },
-                                onClick = { /* selection handled via state in full VM */ }
-                            )
-                        }
-                    }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -102,14 +71,6 @@ fun ScannerScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.weight(1f))
-                    BasicTextField(
-                        value = TextFieldValue(""),
-                        onValueChange = {},
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = TextFieldDefaults.textFieldColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        )
-                    )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -128,15 +89,14 @@ fun ScannerScreen(
         }
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Action buttons
         Row {
             Button(
                 onClick = {
                     scope.launch {
-                        val count = repo.firstScan(
+                        repo.firstScan(
                             pid = targetPid,
-                            type = ValueType.DWORD,
-                            searchType = SearchType.EXACT,
+                            type = com.sephile.app.model.ValueType.DWORD,
+                            searchType = com.sephile.app.model.SearchType.EXACT,
                             targetValue = 0,
                             targetValueF = 0.0,
                             fuzzyDelta = 0,
@@ -152,9 +112,9 @@ fun ScannerScreen(
             Button(
                 onClick = {
                     scope.launch {
-                        val count = repo.nextScan(
-                            type = ValueType.DWORD,
-                            searchType = SearchType.EXACT,
+                        repo.nextScan(
+                            type = com.sephile.app.model.ValueType.DWORD,
+                            searchType = com.sephile.app.model.SearchType.EXACT,
                             targetValue = 0,
                             targetValueF = 0.0,
                             fuzzyDelta = 0,
@@ -169,20 +129,20 @@ fun ScannerScreen(
         }
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Results
+        val count = repo.candidateCount()
         Text(
-            text = "${ui.candidateCount} candidate(s)",
+            text = "$count candidate(s)",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(8.dp))
 
-        if (ui.candidateCount > 0) {
+        if (count > 0) {
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(vertical = 4.dp)
             ) {
-                items(0 until ui.candidateCount, key = { it }) { index ->
+                items(0 until count, key = { it }) { index ->
                     CandidateItem(
                         index = index,
                         address = repo.candidateAddress(index),
@@ -211,7 +171,7 @@ private fun CandidateItem(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = 2.dp
+        elevation = 0.dp
     ) {
         Row(
             modifier = Modifier.padding(12.dp).fillMaxWidth(),
@@ -230,22 +190,33 @@ private fun CandidateItem(
                 )
             }
             Spacer(modifier = Modifier.weight(1f))
-            Row {
-                IconButton(onClick = onEdit) {
-                    Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Default.Edit,
-                        contentDescription = "Edit",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-                IconButton(onClick = onFreeze) {
-                    Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Default.Lock,
-                        contentDescription = "Freeze",
-                        tint = MaterialTheme.colorScheme.success
-                    )
-                }
+            TextButton(onClick = onEdit) {
+                Text(text = "Edit")
             }
+            TextButton(onClick = onFreeze) {
+                Text(text = "Freeze")
+            }
+        }
+    }
+}
+
+private fun Chip(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    label: @Composable () -> Unit
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        elevation = 0.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            label
         }
     }
 }

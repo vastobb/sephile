@@ -6,8 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.*
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -24,7 +23,7 @@ fun ProcessListScreen(
     onAttach: (pid: Int, name: String) -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val processes by repo.observeProcesses().collectAsStateWithLifecycle()
+    val processes by repo.observeProcesses().collectAsState()
     var refresh by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -35,16 +34,7 @@ fun ProcessListScreen(
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        TextButton(
-            onClick = { refresh = true },
-            colors = ButtonDefaults.textButtonColors(
-                containerColor = Color.Transparent,
-                contentColor = MaterialTheme.colorScheme.primary
-            )
-        ) {
-            Text(text = "Refresh", style = MaterialTheme.typography.labelMedium)
-        }
-        Spacer(modifier = Modifier.height(8.dp))
+        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(8.dp))
 
         if (processes.isEmpty()) {
             Text(text = "No processes found", style = MaterialTheme.typography.bodyMedium,
@@ -77,18 +67,15 @@ private fun ProcessListItem(process: ProcessInfo, onClick: () -> Unit) {
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
-        elevation = 2.dp
+        elevation = 0.dp
     ) {
         Row(
             modifier = Modifier.padding(12.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onClick) {
-                Icon(
-                    imageVector = androidx.compose.material.icons.Icons.Default.PlayCircleOutline,
-                    contentDescription = "Attach to ${process.name}",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+            TextButton(onClick = onClick) {
+                Text(text = "Attach", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column {
