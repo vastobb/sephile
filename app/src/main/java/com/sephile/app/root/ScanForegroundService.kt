@@ -70,7 +70,7 @@ class ScanForegroundService : Service() {
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle("Sephile")
             .setContentText("Memory scan running in background")
-            .setSmallIcon(R.drawable.ic_launcher)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)

@@ -1,18 +1,22 @@
 package com.sephile.app.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.style.FontFamily
 import androidx.compose.ui.unit.dp
-import com.sephile.app.di.Module
 import com.sephile.app.repository.MemoryRepository
+import com.sephile.app.model.ValueType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,10 +29,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
  * Live Memory Inspector ("offset finder").
  *
  * Enter a target address, tap Start to continuously read N bytes from the
- * attached process and display them as hex + ASCII. Changed bytes are
- * highlighted green so you can spot the value that changes in-game (e.g. the
- * Minecraft grass block render/glow state). Tap any byte to edit it live and
- * poke the new value back into the target process.
+ * attached process and display them as hex + ASCII. Changed bytes highlight
+ * green so you can spot the value that changes in-game. Tap any byte to
+ * poke/edit it live into the target process.
  */
 @Composable
 fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
@@ -40,8 +43,8 @@ private fun LiveMemoryInspectorContent(viewModel: LiveMemoryInspectorViewModel) 
     val ui by collectAsStateWithLifecycle(viewModel.ui)
     val scope = rememberCoroutineScope()
 
-    val address by remember { mutableStateOf("") }
-    val length by remember { mutableStateOf("64") }
+    var address by remember { mutableStateOf("") }
+    var length by remember { mutableStateOf("64") }
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
         TopAppBar(
@@ -49,7 +52,7 @@ private fun LiveMemoryInspectorContent(viewModel: LiveMemoryInspectorViewModel) 
             navigationIcon = {
                 IconButton(onClick = { /* back handled by nav */ }) {
                     Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Default.ArrowBack,
+                        imageVector = Icons.Default.ArrowBack,
                         contentDescription = "Back"
                     )
                 }
@@ -149,9 +152,9 @@ private fun LiveMemoryInspectorContent(viewModel: LiveMemoryInspectorViewModel) 
         }
 
         HexDumpEditor(
-            bytes = viewModel.bytes,
-            changed = viewModel.changed,
-            baseAddress = viewModel.address,
+            bytes = ui.bytes,
+            changed = ui.changed,
+            baseAddress = ui.address,
             onByteEdit = { index, newValue ->
                 scope.launch {
                     viewModel.pokeByte(index, newValue)
@@ -172,7 +175,7 @@ class LiveMemoryInspectorViewModel(private val repo: MemoryRepository) {
     val attached: Boolean
         get() = repo.isAttached()
     val targetPid: Int
-        get() = repo.candidateCount() // best-effort; real pid should be threaded through nav
+        get() = 0 // best-effort; real pid should be threaded through nav
         private set
 
     fun setError(err: String) {
@@ -188,19 +191,14 @@ class LiveMemoryInspectorViewModel(private val repo: MemoryRepository) {
             while (isActive) {
                 val buf = repo.peekMemory(address, length) ?: break
                 val changed = BooleanArray(length)
-                var changedAny = false
                 for (i in buf.indices) {
                     val prev = previous?.getOrElse(i) { 0 }
                     if (buf[i] != prev) {
                         changed[i] = true
-                        changedAny = true
                     }
                 }
                 previous = buf.copyOf()
                 _ui.update { it.copy(bytes = buf, changed = changed) }
-                if (!changedAny) {
-                    // still keep watching; only highlight on change
-                }
                 delay(400)
             }
             _ui.update { it.copy(watching = false) }
@@ -213,14 +211,11 @@ class LiveMemoryInspectorViewModel(private val repo: MemoryRepository) {
         _ui.update { it.copy(watching = false) }
     }
 
-    fun refreshOnce() {
-        // handled inside startWatch loop; kept for API parity
-    }
+    fun refreshOnce() {}
 
     fun pokeByte(index: Int, newValue: Int) {
         val addr = _ui.value.address + index
-        val ok = repo.editValue(addr, com.sephile.app.model.ValueType.BYTE,
-            newValue.toLong(), 0.0)
+        val ok = repo.editValue(addr, ValueType.BYTE, newValue.toLong(), 0.0)
         _ui.update {
             it.copy(error = if (ok) "" else "Poke failed")
         }
@@ -261,8 +256,7 @@ private fun HexDumpEditor(
                     Text(
                         text = "0x${(baseAddress + (row * columns)).toString(16).uppercase()}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontFamily = FontFamily.Monospace
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 repeat(columns) { col ->
@@ -283,8 +277,7 @@ private fun HexDumpEditor(
                             style = MaterialTheme.typography.bodyMedium,
                             color = if (isChanged) Color(0xFF7CFC00)
                             else if (inRange) Color(0xFFE6E6E6)
-                            else Color(0xFF4A5568),
-                            fontFamily = FontFamily.Monospace
+                            else Color(0xFF4A5568)
                         )
                     }
                 }
@@ -301,8 +294,7 @@ private fun HexDumpEditor(
                         Text(
                             text = printable.toString(),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = if (inRange) Color(0xFFE6E6E6) else Color(0xFF4A5568),
-                            fontFamily = FontFamily.Monospace
+                            color = if (inRange) Color(0xFFE6E6E6) else Color(0xFF4A5568)
                         )
                     }
                 }

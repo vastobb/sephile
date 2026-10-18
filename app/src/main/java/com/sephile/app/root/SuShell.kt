@@ -35,13 +35,14 @@ object SuShell {
             }
 
             val finished = process.waitFor(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS)
-            SuResult(
+            val result = SuResult(
                 exitCode = if (finished) process.exitValue() else -1,
                 stdout = outBuf.toString(),
                 stderr = errBuf.toString(),
                 timedOut = !finished
             )
             process.destroyForcibly()
+            result
         } catch (e: Exception) {
             SuResult(exitCode = -1, stdout = "", stderr = e.message ?: "unknown", timedOut = false)
         }

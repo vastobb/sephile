@@ -3,7 +3,7 @@ package com.sephile.app.root
 import com.sephile.app.model.SearchType
 import com.sephile.app.model.ValueType
 
-object NativeBridge {
+class NativeBridge {
     init {
         System.loadLibrary("sephile_jni")
     }
@@ -27,12 +27,8 @@ object NativeBridge {
     external fun nativeEditValue(handle: Long, address: Long, type: Int, intVal: Long, floatVal: Double): Boolean
     external fun nativeFreeze(handle: Long, address: Long, enabled: Boolean, value: String)
     external fun nativeHasRoot(): Boolean
-
-    // -------- Lua scripting --------
     external fun nativeLuaLoad(handle: Long): Boolean
     external fun nativeLuaExec(handle: Long, script: String): String
     external fun nativeLuaBindApi(handle: Long): Boolean
-
-    // -------- Raw memory peek (hex editor / live inspector) --------
     external fun nativePeekMemory(handle: Long, address: Long, length: Int): ByteArray?
 }
