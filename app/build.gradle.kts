@@ -14,6 +14,11 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        externalNativeBuild {
+            cmake {
+                abiFilters("arm64-v8a", "armeabi-v7a", "x86_64")
+            }
+        }
     }
 
     buildTypes {
@@ -57,19 +62,14 @@ android {
 
     externalNativeBuild {
         cmake {
-            path = "src/main/jni/CMakeLists.txt"
+            path = file("src/main/jni/CMakeLists.txt")
             version = "3.22.1"
-            abiFilters("arm64-v8a", "armeabi-v7a", "x86_64")
-            arguments = listOf(
-                "-DANDROID_STL=c++_shared",
-                "-DANDROID_TOOLCHAIN=clang"
-            )
         }
     }
 
     sourceSets {
         main {
-            jniLibs.srcDirs("src/main/jniLibs")
+            jniLibs.srcDirs(listOf("src/main/jniLibs"))
         }
     }
 }
