@@ -25,7 +25,7 @@ fun ProcessListScreen(
     onAttach: (pid: Int, name: String) -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val processesState = repo.observeProcesses().collectAsState()
+    val processesState = repo.observeProcesses().collectAsState(initial = emptyList<ProcessInfo>())
     val processes = processesState.value
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {

@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
                 val showRootCheck = rootState.value
 
                 if (showRootCheck) {
-                    RootGate(onRootConfirmed = { rootState.value = false })
+                    RootGate(onRootConfirmed = @Composable { rootState.value = false })
                 } else {
                     SephileNavigator(
                         processRepo = processRepo,
