@@ -19,6 +19,7 @@ import com.sephile.app.model.SearchType
 import com.sephile.app.repository.MemoryRepository
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScannerScreen(
     repo: MemoryRepository,
