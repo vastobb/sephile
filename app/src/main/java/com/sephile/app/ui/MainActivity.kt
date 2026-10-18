@@ -18,7 +18,6 @@ import com.sephile.app.repository.ProcessRepository
 import com.sephile.app.root.LuaRepository
 import com.sephile.app.root.RootManager
 import com.sephile.app.ui.theme.SephileTheme
-import com.sephile.app.ui.theme.forceSephileColors
 
 class MainActivity : ComponentActivity() {
 
@@ -30,7 +29,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             SephileTheme(darkTheme = true) {
-                forceSephileColors()
                 val rootState = rememberSaveable { mutableStateOf<Boolean>(!RootManager.isRootAvailable()) }
                 val showRootCheck = rootState.value
 
