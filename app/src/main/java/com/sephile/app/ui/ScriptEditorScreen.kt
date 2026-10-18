@@ -3,7 +3,6 @@ package com.sephile.app.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
@@ -17,7 +16,7 @@ fun ScriptEditorScreen(luaRepo: LuaRepository) {
     val viewModel = remember { LuaViewModel(luaRepo) }
     val scope = rememberCoroutineScope()
 
-    val scriptState = remember { mutableStateOf("") }
+    var script by remember { mutableStateOf("") }
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
         androidx.compose.material3.TopAppBar(
@@ -36,8 +35,8 @@ fun ScriptEditorScreen(luaRepo: LuaRepository) {
         Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedTextField(
-            value = scriptState.value,
-            onValueChange = { scriptState.value = it },
+            value = script,
+            onValueChange = { script = it },
             modifier = Modifier.fillMaxWidth().weight(1f),
             label = { Text(text = "Lua script") }
         )
@@ -46,7 +45,7 @@ fun ScriptEditorScreen(luaRepo: LuaRepository) {
         Row {
             Button(
                 onClick = {
-                    scope.launch { viewModel.runScript(scriptState.value) }
+                    scope.launch { viewModel.runScript(script) }
                 },
                 enabled = viewModel.isLoaded,
                 colors = ButtonDefaults.buttonColors(
