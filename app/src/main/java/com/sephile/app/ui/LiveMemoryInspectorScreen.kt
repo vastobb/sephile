@@ -55,20 +55,14 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
                 value = addressState.value,
                 onValueChange = { addressState.value = it },
                 modifier = Modifier.weight(1f),
-                label = { Text(text = "Address (e.g. 0x7f123000)") },
-                colors = TextFieldDefaults.textFieldColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                label = { Text(text = "Address (e.g. 0x7f123000)") }
             )
             Spacer(modifier = Modifier.width(8.dp))
             OutlinedTextField(
                 value = lengthState.value,
                 onValueChange = { lengthState.value = it },
                 modifier = Modifier.width(80.dp),
-                label = { Text(text = "Bytes") },
-                colors = TextFieldDefaults.textFieldColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                label = { Text(text = "Bytes") }
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
@@ -163,9 +157,6 @@ class LiveMemoryInspectorViewModel(private val repo: MemoryRepository) {
 
     val attached: Boolean
         get() = repo.isAttached()
-    val targetPid: Int
-        get() = 0
-        private set
 
     fun setError(err: String) {
         _ui.update { it.copy(error = err) }
