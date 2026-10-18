@@ -50,11 +50,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Install Gradle 8.6
+      - name: Install Gradle 8.10
         run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.6-bin.zip -O /tmp/gradle.zip
+          wget -q https://services.gradle.org/distributions/gradle-8.10-bin.zip -O /tmp/gradle.zip
           unzip -q -o /tmp/gradle.zip -d $HOME
-          echo "$HOME/gradle-8.6/bin" >> $GITHUB_PATH
+          echo "$HOME/gradle-8.10/bin" >> $GITHUB_PATH
 
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon --console=plain
