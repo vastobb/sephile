@@ -28,8 +28,8 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
     val viewModel = remember { LiveMemoryInspectorViewModel(repo) }
     val scope = rememberCoroutineScope()
 
-    var address by remember { mutableStateOf("") }
-    var length by remember { mutableStateOf("64") }
+    val addressState = remember { mutableStateOf("") }
+    val lengthState = remember { mutableStateOf("64") }
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
         androidx.compose.material3.TopAppBar(
@@ -40,15 +40,15 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
 
         Row(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
-                value = address,
-                onValueChange = { address = it },
+                value = addressState.value,
+                onValueChange = { addressState.value = it },
                 modifier = Modifier.weight(1f),
                 label = { Text(text = "Address (e.g. 0x7f123000)") }
             )
             Spacer(modifier = Modifier.width(8.dp))
             OutlinedTextField(
-                value = length,
-                onValueChange = { length = it },
+                value = lengthState.value,
+                onValueChange = { lengthState.value = it },
                 modifier = Modifier.width(80.dp),
                 label = { Text(text = "Bytes") }
             )
@@ -59,9 +59,9 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
             Button(
                 onClick = {
                     scope.launch {
-                        val addrText = address.trim().removePrefix("0x").removePrefix("0X")
+                        val addrText = addressState.value.trim().removePrefix("0x").removePrefix("0X")
                         val longAddr = addrText.toLongOrNull() ?: -1L
-                        val len = length.toIntOrNull() ?: 64
+                        val len = lengthState.value.toIntOrNull() ?: 64
                         if (longAddr == -1L) {
                             viewModel.setError("Invalid address")
                         } else if (!viewModel.attached) {

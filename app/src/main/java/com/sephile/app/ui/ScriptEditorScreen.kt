@@ -17,7 +17,7 @@ fun ScriptEditorScreen(luaRepo: LuaRepository) {
     val viewModel = remember { LuaViewModel(luaRepo) }
     val scope = rememberCoroutineScope()
 
-    var script by remember { mutableStateOf("") }
+    val scriptState = remember { mutableStateOf("") }
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
         androidx.compose.material3.TopAppBar(
@@ -36,8 +36,8 @@ fun ScriptEditorScreen(luaRepo: LuaRepository) {
         Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedTextField(
-            value = script,
-            onValueChange = { script = it },
+            value = scriptState.value,
+            onValueChange = { scriptState.value = it },
             modifier = Modifier.fillMaxWidth().weight(1f),
             label = { Text(text = "Lua script") }
         )
@@ -46,7 +46,7 @@ fun ScriptEditorScreen(luaRepo: LuaRepository) {
         Row {
             Button(
                 onClick = {
-                    scope.launch { viewModel.runScript(script) }
+                    scope.launch { viewModel.runScript(scriptState.value) }
                 },
                 enabled = viewModel.isLoaded,
                 colors = ButtonDefaults.buttonColors(
