@@ -12,10 +12,9 @@ import androidx.compose.ui.platform.LocalView
 
 @Composable
 fun SephileTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) darkColorScheme() else dynamicLightColorScheme(LocalContext.current)
+    val colorScheme = darkColorScheme()
     MaterialTheme(
         colorScheme = colorScheme,
         content = content

@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            SephileTheme(darkTheme = true) {
+            SephileTheme {
                 val rootState = rememberSaveable { mutableStateOf<Boolean>(!RootManager.isRootAvailable()) }
                 val showRootCheck = rootState.value
 
@@ -53,10 +53,10 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun RootGate(onRootConfirmed: () -> Unit) {
+private fun RootGate(onRootConfirmed: @Composable () -> Unit) {
     val rootAvailable = RootManager.isRootAvailable()
 
-    SephileTheme(darkTheme = true) {
+    SephileTheme {
         androidx.compose.material3.Scaffold(
             topBar = TopAppBar(
                 title = { Text(text = "Sephile — Root Check") },
