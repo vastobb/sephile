@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <string>
 #include <cstring>
+#include <cstdio>
 
 #include "ProcessMemory.h"
 #include "MemoryScanner.h"
@@ -150,4 +151,48 @@ Java_com_sephile_app_root_NativeBridge_nativeHasRoot(JNIEnv* env, jobject /*thiz
     }
     pclose(f);
     return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+// -------- Lua scripting bindings --------
+// NOTE: To enable real Lua 5.4, drop the lua-5.4 src tree into
+// app/src/main/jni/lua/, add it to CMakeLists.txt, define SEPHILE_LUA_ENABLED,
+// and replace these stubs with calls into luaL_loadstring/lua_pcall.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_sephile_app_root_NativeBridge_nativeLuaLoad(JNIEnv* /*env*/, jobject /*thiz*/) {
+    // Stub: real implementation would luaL_newstate() here and store it.
+    return JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_sephile_app_root_NativeBridge_nativeLuaExec(JNIEnv* env, jobject /*thiz*/, jstring script) {
+    const char* s = env->GetStringUTFChars(script, nullptr);
+    std::string out = std::string("Lua engine not bound yet. ")
+        + "Add lua-5.4 source under app/src/main/jni/lua/ and implement "
+        + "nativeLuaLoad/nativeLuaExec/nativeLuaBindApi in native_bridge.cpp.\n"
+        + "Script received (" + std::to_string(std::strlen(s)) + " bytes): "
+        + std::string(s);
+    env->ReleaseStringUTFChars(script, s);
+    return env->NewStringUTF(out.c_str());
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_sephile_app_root_NativeBridge_nativeLuaBindApi(JNIEnv* /*env*/, jobject /*thiz*/) {
+    // Stub: would expose sephile.{scan, edit, freeze, attach, getCandidates} to Lua.
+    return JNI_FALSE;
+}
+
+// -------- Raw memory peek (for hex editor / live inspector) --------
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_sephile_app_root_NativeBridge_nativePeekMemory(JNIEnv* env, jobject /*thiz*/,
+                                                        jlong handle, jlong address, jint length) {
+    auto* s = reinterpret_cast<MemoryScanner*>(handle);
+    if (!s || length <= 0) return env->NewByteArray(0);
+    jbyteArray out = env->NewByteArray(length);
+    if (out == nullptr) return nullptr;
+    std::vector<uint8_t> buf(length);
+    size_t got = s->memory().read(static_cast<uintptr_t>(address), buf.data(), length);
+    if (got == 0) return env->NewByteArray(0);
+    env->SetByteArrayRegion(out, 0, static_cast<jint>(got),
+                            reinterpret_cast<const jbyte*>(buf.data()));
+    return out;
 }

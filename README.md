@@ -13,6 +13,9 @@
 - **Edit** values live in a running process
 - **Freeze** values so they stay constant
 - **Process list** browser with refresh
+- **Live Memory Inspector / offset finder**: enter an address, continuously read bytes, changed bytes highlight green (use this to hunt values like a Minecraft block state), tap any byte to poke/edit it live
+- **Hex dump editor** built into the live inspector
+- **Lua scripting screen** (engine binding stub — wire in lua-5.4 source to activate, see below)
 - Modern **Jetpack Compose** UI (Material 3, dark by default)
 - **GitHub Actions** CI builds debug/release APKs automatically
 
@@ -59,6 +62,15 @@ The debug APK will be at `app/build/outputs/apk/debug/app-debug.apk`.
 
 ### CI
 Pushes and PRs run `.github/workflows/android-ci.yml` which builds the debug APK, runs lint and unit tests. Releases build a signed APK and attach it to the GitHub Release (requires `ANDROID_KEYSTORE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` secrets).
+
+## Lua scripting
+
+A Lua script screen + `LuaRepository` + JNI binding stubs (`nativeLuaLoad`, `nativeLuaExec`, `nativeLuaBindApi`) are included. To make Lua actually run:
+
+1. Download lua-5.4 source from lua.org
+2. Copy the `src/` tree into `app/src/main/jni/lua/`
+3. Add the lua source files to `app/src/main/jni/CMakeLists.txt`
+4. Define `SEPHILE_LUA_ENABLED` and replace the stub bodies in `native_bridge.cpp` with real `luaL_loadstring`/`lua_pcall` calls, exposing `sephile.scan`, `sephile.edit`, `sephile.freeze`, `sephile.attach` to Lua.
 
 ## Root setup
 

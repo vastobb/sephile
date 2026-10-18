@@ -16,8 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.sephile.app.di.Module
-import com.sephile.app.repository.ProcessRepository
 import com.sephile.app.repository.MemoryRepository
+import com.sephile.app.repository.ProcessRepository
+import com.sephile.app.repository.LuaRepository
 import com.sephile.app.root.RootManager
 import com.sephile.app.ui.theme.SephileTheme
 import com.sephile.app.ui.theme.forceSephileColors
@@ -26,6 +27,7 @@ class MainActivity : ComponentActivity() {
 
     private val processRepo = Module.processRepository(this)
     private val memoryRepo = Module.memoryRepository()
+    private val luaRepo = LuaRepository()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,7 +41,8 @@ class MainActivity : ComponentActivity() {
                 } else {
                     SephileNavigator(
                         processRepo = processRepo,
-                        memoryRepo = memoryRepo
+                        memoryRepo = memoryRepo,
+                        luaRepo = luaRepo
                     )
                 }
             }
@@ -49,6 +52,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         memoryRepo.release()
+        luaRepo.release()
     }
 }
 
@@ -103,7 +107,8 @@ private fun RootGate(onRootConfirmed: () -> Unit) {
 @Composable
 private fun SephileNavigator(
     processRepo: ProcessRepository,
-    memoryRepo: MemoryRepository
+    memoryRepo: MemoryRepository,
+    luaRepo: LuaRepository
 ) {
     var screen by rememberSaveable { mutableStateOf(Screen.Processes) }
     var target by rememberSaveable { mutableStateOf(Pair(-1, "")) }
@@ -113,6 +118,8 @@ private fun SephileNavigator(
             title = { Text(text = when (screen) {
                 Screen.Processes -> "Processes"
                 Screen.Scanner -> "Scanner"
+                Screen.LiveInspector -> "Live Inspector"
+                Screen.Lua -> "Lua Scripts"
                 Screen.Settings -> "Settings"
             }) },
             colors = androidx.compose.material3.TopAppBarDefaults.mediumTopAppBarColors(
@@ -124,8 +131,8 @@ private fun SephileNavigator(
             Screen.Processes -> ProcessListScreen(
                 repo = processRepo,
                 onAttach = { pid, name ->
-                    screen = Screen.Scanner
                     target = Pair(pid, name)
+                    screen = Screen.Scanner
                 }
             )
             Screen.Scanner -> ScannerScreen(
@@ -134,20 +141,13 @@ private fun SephileNavigator(
                 targetName = target.second,
                 onBack = { screen = Screen.Processes }
             )
+            Screen.LiveInspector -> LiveMemoryInspectorScreen(repo = memoryRepo)
+            Screen.Lua -> ScriptEditorScreen(luaRepo = luaRepo)
             Screen.Settings -> SettingsScreen()
         }
     }
 }
 
 private enum class Screen {
-    Processes, Scanner, Settings
-}
-
-@Composable
-private fun SettingsScreen() {
-    Text(
-        text = "Settings (coming soon)",
-        modifier = Modifier.fillMaxSize(),
-        style = androidx.compose.material3.MaterialTheme.typography.bodyLarge
-    )
+    Processes, Scanner, LiveInspector, Lua, Settings
 }

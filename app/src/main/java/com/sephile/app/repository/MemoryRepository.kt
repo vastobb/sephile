@@ -72,4 +72,10 @@ class MemoryRepository {
     fun freeze(address: Long, enabled: Boolean, value: String) {
         bridge.nativeFreeze(handle, address, enabled, value)
     }
+
+    /** Read raw bytes from the attached process at `address` (returns null on failure). */
+    fun peekMemory(address: Long, length: Int): ByteArray? {
+        if (handle == 0L || !isAttached()) return null
+        return bridge.nativePeekMemory(handle, address, length)
+    }
 }

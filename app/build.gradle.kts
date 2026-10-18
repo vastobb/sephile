@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.sephile.app"
-    compileSdk = extra["compileSdk"] as Int
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.sephile.app"
-        minSdk = extra["minSdk"] as Int
-        targetSdk = extra["targetSdk"] as Int
+        minSdk = 24
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -77,11 +77,12 @@ android {
 dependencies {
     implementation(platform(libs.bundles.compose.bom))
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.hilt.navigation.compose)
-    implementation(libs.material3)
+    implementation(libs.androidx.material3)
     implementation(libs.androidx.concurrent)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okio)
@@ -93,5 +94,5 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.runner)
-    androidTestImplementation(libs.androidx.test.espresso.core)
+    androidTestImplementation(libs.androidx.espresso.core)
 }
