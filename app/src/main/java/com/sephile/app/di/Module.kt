@@ -4,11 +4,9 @@ import android.content.Context
 import com.sephile.app.repository.MemoryRepository
 import com.sephile.app.repository.ProcessRepository
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.newCoroutineContext
+import kotlinx.coroutines.CoroutineScope
 
-@OptIn(ExperimentalCoroutinesApi::class)
 object Module {
 
     fun processRepository(context: Context): ProcessRepository =
@@ -18,5 +16,5 @@ object Module {
 
     val dispatcher = Dispatchers.Default
     val supervisorJob = SupervisorJob()
-    val coroutineContext = newCoroutineContext(SupervisorJob() + Dispatchers.Default)
+    val coroutineScope = CoroutineScope(supervisorJob + Dispatchers.Default)
 }

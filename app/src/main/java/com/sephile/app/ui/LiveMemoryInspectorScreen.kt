@@ -6,7 +6,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -23,7 +22,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.MutableStateFlow
+import androidx.lifecycle.StateFlow
 
 /**
  * Live Memory Inspector ("offset finder").
@@ -35,12 +35,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
  */
 @Composable
 fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
-    LiveMemoryInspectorContent(viewModel = remember { LiveMemoryInspectorViewModel(repo) })
-}
-
-@Composable
-private fun LiveMemoryInspectorContent(viewModel: LiveMemoryInspectorViewModel) {
-    val ui by collectAsStateWithLifecycle(viewModel.ui)
+    val viewModel = remember { LiveMemoryInspectorViewModel(repo) }
+    val ui by viewModel.ui.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
     var address by remember { mutableStateOf("") }
@@ -62,6 +58,7 @@ private fun LiveMemoryInspectorContent(viewModel: LiveMemoryInspectorViewModel) 
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(modifier = Modifier.fillMaxWidth()) {
+            var first by remember { mutableStateOf(false) }
             BasicTextField(
                 value = TextFieldValue(address),
                 onValueChange = { address = it.text },
@@ -101,18 +98,18 @@ private fun LiveMemoryInspectorContent(viewModel: LiveMemoryInspectorViewModel) 
                         }
                     }
                 },
-                enabled = viewModel.attached && !viewModel.watching,
+                enabled = viewModel.attached && !ui.watching,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (viewModel.attached) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             ) {
-                Text(text = if (viewModel.watching) "Stop" else "Start watch")
+                Text(text = if (ui.watching) "Stop" else "Start watch")
             }
             Spacer(modifier = Modifier.width(8.dp))
             Button(
                 onClick = { viewModel.stopWatch() },
-                enabled = viewModel.watching,
+                enabled = ui.watching,
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)
             ) {
                 Text(text = "Stop")
@@ -120,7 +117,7 @@ private fun LiveMemoryInspectorContent(viewModel: LiveMemoryInspectorViewModel) 
             Spacer(modifier = Modifier.width(8.dp))
             Button(
                 onClick = { viewModel.refreshOnce() },
-                enabled = viewModel.watching,
+                enabled = ui.watching,
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
             ) {
                 Text(text = "Read once")
@@ -136,15 +133,15 @@ private fun LiveMemoryInspectorContent(viewModel: LiveMemoryInspectorViewModel) 
         )
         Spacer(modifier = Modifier.height(8.dp))
 
-        if (viewModel.error.isNotEmpty()) {
-            Text(text = viewModel.error, style = MaterialTheme.typography.bodyMedium,
+        if (ui.error.isNotEmpty()) {
+            Text(text = ui.error, style = MaterialTheme.typography.bodyMedium,
                 color = Color(0xFFFF5555))
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        if (viewModel.watching) {
+        if (ui.watching) {
             Text(
-                text = "Watching ${viewModel.byteCount} bytes @ 0x${viewModel.address.toString(16).uppercase()}",
+                text = "Watching ${ui.byteCount} bytes @ 0x${ui.address.toString(16).uppercase()}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -169,13 +166,13 @@ class LiveMemoryInspectorViewModel(private val repo: MemoryRepository) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var watchJob: kotlinx.coroutines.Job? = null
 
-    private val _ui = androidx.lifecycle.MutableStateFlow(LiveMemoryInspectorUiState())
-    val ui: androidx.lifecycle.StateFlow<LiveMemoryInspectorUiState> = _ui.asStateFlow()
+    private val _ui = MutableStateFlow(LiveMemoryInspectorUiState())
+    val ui: StateFlow<LiveMemoryInspectorUiState> = _ui.asStateFlow()
 
     val attached: Boolean
         get() = repo.isAttached()
     val targetPid: Int
-        get() = 0 // best-effort; real pid should be threaded through nav
+        get() = 0
         private set
 
     fun setError(err: String) {

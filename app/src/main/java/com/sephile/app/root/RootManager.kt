@@ -64,7 +64,11 @@ object RootManager {
     fun requestIgnoreBatteryOptimizations(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val pm = context.packageManager
-            if (pm.requestIgnoreBatteryOptimizations(context.packageName)) return
+            try {
+                if (pm.requestIgnoreBatteryOptimizations(context.packageName)) return
+            } catch (_: Exception) {
+                // method may not be available on all devices; fall through to intent
+            }
             val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
                 .setData(Uri.parse("package:${context.packageName}"))
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
