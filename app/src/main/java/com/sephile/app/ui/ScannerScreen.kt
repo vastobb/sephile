@@ -16,7 +16,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.sephile.app.model.ValueType
 import com.sephile.app.model.SearchType
-import com.sephile.app.model.ValueType
 import com.sephile.app.repository.MemoryRepository
 import kotlinx.coroutines.launch
 

@@ -8,6 +8,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.dp
 import com.sephile.app.root.LuaRepository
 import kotlinx.coroutines.launch
 
@@ -78,7 +79,7 @@ fun ScriptEditorScreen(luaRepo: LuaRepository) {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = if (viewModel.output.isNotEmpty()) viewModel.output else "(no output yet)",
+                    text = if (viewModel.output != null && viewModel.output.isNotEmpty()) viewModel.output else "(no output yet)",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )

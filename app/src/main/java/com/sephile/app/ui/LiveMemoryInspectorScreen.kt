@@ -6,7 +6,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -40,15 +39,15 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
 
         Row(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
-                value = addressState.value,
-                onValueChange = { addressState.value = it },
+                value = address,
+                onValueChange = { address = it },
                 modifier = Modifier.weight(1f),
                 label = { Text(text = "Address (e.g. 0x7f123000)") }
             )
             Spacer(modifier = Modifier.width(8.dp))
             OutlinedTextField(
-                value = lengthState.value,
-                onValueChange = { lengthState.value = it },
+                value = length,
+                onValueChange = { length = it },
                 modifier = Modifier.width(80.dp),
                 label = { Text(text = "Bytes") }
             )
