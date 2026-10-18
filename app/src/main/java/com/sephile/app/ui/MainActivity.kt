@@ -29,18 +29,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             SephileTheme {
-                val rootState = rememberSaveable { mutableStateOf<Boolean>(!RootManager.isRootAvailable()) }
-                val showRootCheck = rootState.value
-
-                if (showRootCheck) {
-                    RootGate(onRootConfirmed = @Composable { rootState.value = false })
-                } else {
-                    SephileNavigator(
-                        processRepo = processRepo,
-                        memoryRepo = memoryRepo,
-                        luaRepo = luaRepo
-                    )
-                }
+                SephileNavigator(
+                    processRepo = processRepo,
+                    memoryRepo = memoryRepo,
+                    luaRepo = luaRepo
+                )
             }
         }
     }
