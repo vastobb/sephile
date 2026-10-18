@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import androidx.lifecycle.MutableStateFlow
 import androidx.lifecycle.StateFlow
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
  * Live Memory Inspector ("offset finder").
@@ -39,29 +40,20 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
-    var address by remember { mutableStateOf("") }
-    var length by remember { mutableStateOf("64") }
+    val addressState = remember { mutableStateOf("") }
+    val lengthState = remember { mutableStateOf("64") }
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
         TopAppBar(
             title = { Text(text = "Live Memory Inspector") },
-            navigationIcon = {
-                IconButton(onClick = { /* back handled by nav */ }) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = "Back"
-                    )
-                }
-            },
             colors = TopAppBarDefaults.mediumTopAppBarColors(containerColor = Color.Transparent)
         )
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(modifier = Modifier.fillMaxWidth()) {
-            var first by remember { mutableStateOf(false) }
             BasicTextField(
-                value = TextFieldValue(address),
-                onValueChange = { address = it.text },
+                value = TextFieldValue(addressState.value),
+                onValueChange = { addressState.value = it.text },
                 modifier = Modifier.weight(1f),
                 label = { Text(text = "Address (e.g. 0x7f123000)") },
                 colors = TextFieldDefaults.textFieldColors(
@@ -70,8 +62,8 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
             )
             Spacer(modifier = Modifier.width(8.dp))
             BasicTextField(
-                value = TextFieldValue(length),
-                onValueChange = { length = it.text },
+                value = TextFieldValue(lengthState.value),
+                onValueChange = { lengthState.value = it.text },
                 modifier = Modifier.width(80.dp),
                 label = { Text(text = "Bytes") },
                 colors = TextFieldDefaults.textFieldColors(
@@ -85,9 +77,9 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
             Button(
                 onClick = {
                     scope.launch {
-                        val addrText = address.trim().removePrefix("0x").removePrefix("0X")
+                        val addrText = addressState.value.trim().removePrefix("0x").removePrefix("0X")
                         val longAddr = addrText.toLongOrNull() ?: -1L
-                        val len = length.toIntOrNull() ?: 64
+                        val len = lengthState.value.toIntOrNull() ?: 64
                         if (longAddr == -1L) {
                             viewModel.setError("Invalid address")
                         } else if (!viewModel.attached) {
