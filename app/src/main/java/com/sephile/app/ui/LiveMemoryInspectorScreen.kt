@@ -4,12 +4,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -23,9 +20,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
  * Live Memory Inspector ("offset finder").
@@ -38,7 +36,8 @@ import kotlinx.coroutines.flow.StateFlow
 @Composable
 fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
     val viewModel = remember { LiveMemoryInspectorViewModel(repo) }
-    val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val ui: StateFlow<LiveMemoryInspectorUiState> = viewModel.ui
+    val uiState by ui.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
     val addressState = remember { mutableStateOf<String>("") }
@@ -52,9 +51,9 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(modifier = Modifier.fillMaxWidth()) {
-            BasicTextField(
-                value = TextFieldValue(addressState.value),
-                onValueChange = { addressState.value = it.text },
+            OutlinedTextField(
+                value = addressState.value,
+                onValueChange = { addressState.value = it },
                 modifier = Modifier.weight(1f),
                 label = { Text(text = "Address (e.g. 0x7f123000)") },
                 colors = TextFieldDefaults.textFieldColors(
@@ -62,9 +61,9 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
                 )
             )
             Spacer(modifier = Modifier.width(8.dp))
-            BasicTextField(
-                value = TextFieldValue(lengthState.value),
-                onValueChange = { lengthState.value = it.text },
+            OutlinedTextField(
+                value = lengthState.value,
+                onValueChange = { lengthState.value = it },
                 modifier = Modifier.width(80.dp),
                 label = { Text(text = "Bytes") },
                 colors = TextFieldDefaults.textFieldColors(
@@ -91,18 +90,18 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
                         }
                     }
                 },
-                enabled = viewModel.attached && !ui.watching,
+                enabled = viewModel.attached && !uiState.watching,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (viewModel.attached) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             ) {
-                Text(text = if (ui.watching) "Stop" else "Start watch")
+                Text(text = if (uiState.watching) "Stop" else "Start watch")
             }
             Spacer(modifier = Modifier.width(8.dp))
             Button(
                 onClick = { viewModel.stopWatch() },
-                enabled = ui.watching,
+                enabled = uiState.watching,
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)
             ) {
                 Text(text = "Stop")
@@ -110,7 +109,7 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
             Spacer(modifier = Modifier.width(8.dp))
             Button(
                 onClick = { viewModel.refreshOnce() },
-                enabled = ui.watching,
+                enabled = uiState.watching,
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
             ) {
                 Text(text = "Read once")
@@ -126,15 +125,15 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
         )
         Spacer(modifier = Modifier.height(8.dp))
 
-        if (ui.error.isNotEmpty()) {
-            Text(text = ui.error, style = MaterialTheme.typography.bodyMedium,
+        if (uiState.error.isNotEmpty()) {
+            Text(text = uiState.error, style = MaterialTheme.typography.bodyMedium,
                 color = Color(0xFFFF5555))
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        if (ui.watching) {
+        if (uiState.watching) {
             Text(
-                text = "Watching ${ui.byteCount} bytes @ 0x${ui.address.toString(16).uppercase()}",
+                text = "Watching ${uiState.byteCount} bytes @ 0x${uiState.address.toString(16).uppercase()}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -142,9 +141,9 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
         }
 
         HexDumpEditor(
-            bytes = ui.bytes,
-            changed = ui.changed,
-            baseAddress = ui.address,
+            bytes = uiState.bytes,
+            changed = uiState.changed,
+            baseAddress = uiState.address,
             onByteEdit = { index, newValue ->
                 scope.launch {
                     viewModel.pokeByte(index, newValue)
@@ -160,7 +159,7 @@ class LiveMemoryInspectorViewModel(private val repo: MemoryRepository) {
     private var watchJob: kotlinx.coroutines.Job? = null
 
     private val _ui = MutableStateFlow(LiveMemoryInspectorUiState())
-    val ui: StateFlow<LiveMemoryInspectorUiState> = _ui.asStateFlow()
+    val ui: StateFlow<LiveMemoryInspectorUiState> = _ui
 
     val attached: Boolean
         get() = repo.isAttached()
