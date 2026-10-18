@@ -6,6 +6,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -48,7 +50,8 @@ private fun SephileNavigator(
     memoryRepo: MemoryRepository,
     luaRepo: LuaRepository
 ) {
-    var screen by remember { mutableStateOf(Screen.Processes) }
+    val screenState = remember { mutableStateOf(Screen.Processes) }
+    val screen = screenState.value
 
     androidx.compose.material3.Scaffold(
         topBar = androidx.compose.material3.TopAppBar(
@@ -67,13 +70,15 @@ private fun SephileNavigator(
         when (screen) {
             Screen.Processes -> ProcessListScreen(
                 repo = processRepo,
-                onAttach = { _, _ -> }
+                onAttach = { pid, name ->
+                    screenState.value = Screen.Scanner
+                }
             )
             Screen.Scanner -> ScannerScreen(
                 repo = memoryRepo,
                 targetPid = -1,
                 targetName = "",
-                onBack = { }
+                onBack = { screenState.value = Screen.Processes }
             )
             Screen.LiveInspector -> LiveMemoryInspectorScreen(repo = memoryRepo)
             Screen.Lua -> ScriptEditorScreen(luaRepo = luaRepo)
