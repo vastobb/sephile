@@ -6,61 +6,49 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.*
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import com.sephile.app.repository.MemoryRepository
 import com.sephile.app.model.ValueType
+import com.sephile.app.repository.MemoryRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.update
 
-/**
- * Live Memory Inspector ("offset finder").
- *
- * Enter a target address, tap Start to continuously read N bytes from the
- * attached process and display them as hex + ASCII. Changed bytes highlight
- * green so you can spot the value that changes in-game. Tap any byte to
- * poke/edit it live into the target process.
- */
 @Composable
 fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
     val viewModel = remember { LiveMemoryInspectorViewModel(repo) }
-    val ui: StateFlow<LiveMemoryInspectorUiState> = viewModel.ui
-    val uiState = ui.value
     val scope = rememberCoroutineScope()
 
-    val addressState = remember { mutableStateOf<String>("") }
-    val lengthState = remember { mutableStateOf<String>("64") }
+    var address by remember { mutableStateOf("") }
+    var length by remember { mutableStateOf("64") }
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
-        TopAppBar(
+        androidx.compose.material3.TopAppBar(
             title = { Text(text = "Live Memory Inspector") },
-            colors = TopAppBarDefaults.mediumTopAppBarColors(containerColor = Color.Transparent)
+            colors = androidx.compose.material3.TopAppBarDefaults.mediumTopAppBarColors(containerColor = Color.Transparent)
         )
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
-                value = addressState.value,
-                onValueChange = { addressState.value = it },
+                value = address,
+                onValueChange = { address = it },
                 modifier = Modifier.weight(1f),
                 label = { Text(text = "Address (e.g. 0x7f123000)") }
             )
             Spacer(modifier = Modifier.width(8.dp))
             OutlinedTextField(
-                value = lengthState.value,
-                onValueChange = { lengthState.value = it },
+                value = length,
+                onValueChange = { length = it },
                 modifier = Modifier.width(80.dp),
                 label = { Text(text = "Bytes") }
             )
@@ -71,9 +59,9 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
             Button(
                 onClick = {
                     scope.launch {
-                        val addrText = addressState.value.trim().removePrefix("0x").removePrefix("0X")
+                        val addrText = address.trim().removePrefix("0x").removePrefix("0X")
                         val longAddr = addrText.toLongOrNull() ?: -1L
-                        val len = lengthState.value.toIntOrNull() ?: 64
+                        val len = length.toIntOrNull() ?: 64
                         if (longAddr == -1L) {
                             viewModel.setError("Invalid address")
                         } else if (!viewModel.attached) {
@@ -84,29 +72,21 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
                         }
                     }
                 },
-                enabled = viewModel.attached && !uiState.watching,
+                enabled = viewModel.attached && !viewModel.watching,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (viewModel.attached) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             ) {
-                Text(text = if (uiState.watching) "Stop" else "Start watch")
+                Text(text = if (viewModel.watching) "Stop" else "Start watch")
             }
             Spacer(modifier = Modifier.width(8.dp))
             Button(
                 onClick = { viewModel.stopWatch() },
-                enabled = uiState.watching,
+                enabled = viewModel.watching,
                 colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)
             ) {
                 Text(text = "Stop")
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Button(
-                onClick = { viewModel.refreshOnce() },
-                enabled = uiState.watching,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-            ) {
-                Text(text = "Read once")
             }
         }
         Spacer(modifier = Modifier.height(8.dp))
@@ -119,15 +99,15 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
         )
         Spacer(modifier = Modifier.height(8.dp))
 
-        if (uiState.error.isNotEmpty()) {
-            Text(text = uiState.error, style = MaterialTheme.typography.bodyMedium,
+        if (viewModel.error.isNotEmpty()) {
+            Text(text = viewModel.error, style = MaterialTheme.typography.bodyMedium,
                 color = Color(0xFFFF5555))
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        if (uiState.watching) {
+        if (viewModel.watching) {
             Text(
-                text = "Watching ${uiState.byteCount} bytes @ 0x${uiState.address.toString(16).uppercase()}",
+                text = "Watching ${viewModel.byteCount} bytes @ 0x${viewModel.address.toString(16).uppercase()}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -135,9 +115,9 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
         }
 
         HexDumpEditor(
-            bytes = uiState.bytes,
-            changed = uiState.changed,
-            baseAddress = uiState.address,
+            bytes = viewModel.bytes,
+            changed = viewModel.changed,
+            baseAddress = viewModel.address,
             onByteEdit = { index, newValue ->
                 scope.launch {
                     viewModel.pokeByte(index, newValue)
@@ -152,22 +132,42 @@ class LiveMemoryInspectorViewModel(private val repo: MemoryRepository) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var watchJob: kotlinx.coroutines.Job? = null
 
-    private val _ui = MutableStateFlow(LiveMemoryInspectorUiState())
-    val ui: StateFlow<LiveMemoryInspectorUiState> = _ui
+    var attached: Boolean = repo.isAttached()
+        private set
 
-    val targetPid: Int = 0
+    var targetPid: Int = 0
+        private set
 
-    val attached: Boolean
-        get() = repo.isAttached()
+    var watching: Boolean = false
+        private set
+
+    var address: Long = 0
+        private set
+
+    var byteCount: Int = 0
+        private set
+
+    var bytes: ByteArray = byteArrayOf()
+        private set
+
+    var changed: BooleanArray = booleanArrayOf()
+        private set
+
+    var error: String = ""
+        private set
 
     fun setError(err: String) {
-        _ui.update { it.copy(error = err) }
+        error = err
     }
 
     fun startWatch(address: Long, length: Int) {
         stopWatch()
-        _ui.update { it.copy(address = address, byteCount = length,
-            bytes = ByteArray(length), changed = BooleanArray(length), watching = true, error = "") }
+        this.address = address
+        this.byteCount = length
+        this.bytes = ByteArray(length)
+        this.changed = BooleanArray(length)
+        this.watching = true
+        this.error = ""
         var previous: ByteArray? = null
         watchJob = scope.launch {
             while (isActive) {
@@ -180,40 +180,26 @@ class LiveMemoryInspectorViewModel(private val repo: MemoryRepository) {
                     }
                 }
                 previous = buf.copyOf()
-                _ui.update { it.copy(bytes = buf, changed = changed) }
+                this.bytes = buf
+                this.changed = changed
                 delay(400)
             }
-            _ui.update { it.copy(watching = false) }
+            this.watching = false
         }
     }
 
     fun stopWatch() {
         watchJob?.cancel()
         watchJob = null
-        _ui.update { it.copy(watching = false) }
+        watching = false
     }
-
-    fun refreshOnce() {}
 
     fun pokeByte(index: Int, newValue: Int) {
-        val addr = _ui.value.address + index
+        val addr = this.address + index
         val ok = repo.editValue(addr, ValueType.BYTE, newValue.toLong(), 0.0)
-        _ui.update {
-            it.copy(error = if (ok) "" else "Poke failed")
-        }
+        error = if (ok) "" else "Poke failed"
     }
 }
-
-data class LiveMemoryInspectorUiState(
-    val attached: Boolean = false,
-    val targetPid: Int = -1,
-    val watching: Boolean = false,
-    val address: Long = 0L,
-    val byteCount: Int = 0,
-    val bytes: ByteArray = byteArrayOf(),
-    val changed: BooleanArray = booleanArrayOf(),
-    val error: String = ""
-)
 
 @Composable
 private fun HexDumpEditor(

@@ -6,23 +6,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.TextFieldValue
 import com.sephile.app.root.LuaRepository
+import kotlinx.coroutines.launch
 
 @Composable
 fun ScriptEditorScreen(luaRepo: LuaRepository) {
     val viewModel = remember { LuaViewModel(luaRepo) }
-    val uiState = viewModel.ui.value
     val scope = rememberCoroutineScope()
 
-    val scriptState = remember { mutableStateOf("") }
+    var script by remember { mutableStateOf("") }
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
         androidx.compose.material3.TopAppBar(
@@ -34,15 +29,15 @@ fun ScriptEditorScreen(luaRepo: LuaRepository) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = if (uiState.loaded) "Lua engine loaded" else "Lua engine: stub",
+            text = if (viewModel.isLoaded) "Lua engine loaded" else "Lua engine: stub",
             style = MaterialTheme.typography.bodyMedium,
-            color = if (uiState.loaded) Color(0xFF50FA7B) else Color(0xFFFFB86C)
+            color = if (viewModel.isLoaded) Color(0xFF50FA7B) else Color(0xFFFFB86C)
         )
         Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedTextField(
-            value = scriptState.value,
-            onValueChange = { scriptState.value = it },
+            value = script,
+            onValueChange = { script = it },
             modifier = Modifier.fillMaxWidth().weight(1f),
             label = { Text(text = "Lua script") }
         )
@@ -51,11 +46,11 @@ fun ScriptEditorScreen(luaRepo: LuaRepository) {
         Row {
             Button(
                 onClick = {
-                    scope.launch { viewModel.runScript(scriptState.value) }
+                    scope.launch { viewModel.runScript(script) }
                 },
-                enabled = uiState.loaded,
+                enabled = viewModel.isLoaded,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (uiState.loaded) MaterialTheme.colorScheme.primary
+                    containerColor = if (viewModel.isLoaded) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             ) {
@@ -74,7 +69,7 @@ fun ScriptEditorScreen(luaRepo: LuaRepository) {
         Card(
             modifier = Modifier.fillMaxWidth().weight(1f),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF0B0E14)),
-            elevation = 0.dp
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
@@ -84,14 +79,14 @@ fun ScriptEditorScreen(luaRepo: LuaRepository) {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = if (uiState.output.isNotEmpty()) uiState.output else "(no output yet)",
+                    text = if (viewModel.output.isNotEmpty()) viewModel.output else "(no output yet)",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                uiState.error?.let { err ->
+                if (viewModel.error.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = err,
+                        text = viewModel.error,
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFFFF5555)
                     )
@@ -103,30 +98,23 @@ fun ScriptEditorScreen(luaRepo: LuaRepository) {
 
 class LuaViewModel(private val repo: LuaRepository) {
 
-    private val _ui = MutableStateFlow(LuaUiState(loaded = repo.isLoaded()))
-    val ui: StateFlow<LuaUiState> = _ui.asStateFlow()
+    var isLoaded: Boolean = repo.isLoaded()
+        private set
+
+    var output: String = ""
+        private set
+
+    var error: String? = null
+        private set
 
     fun runScript(script: String) {
-        _ui.update { it.copy(isRunning = true, error = null, output = "") }
-        val result = repo.exec(script)
-        _ui.update {
-            it.copy(
-                isRunning = false,
-                output = result,
-                error = if (result.contains("not bound") || result.contains("not initialized"))
-                    "Lua engine not enabled" else null
-            )
-        }
+        output = repo.exec(script)
+        error = if (output.contains("not bound") || output.contains("not initialized"))
+            "Lua engine not enabled" else null
     }
 
     fun clearOutput() {
-        _ui.update { it.copy(output = "", error = null) }
+        output = ""
+        error = null
     }
 }
-
-data class LuaUiState(
-    val loaded: Boolean = false,
-    val isRunning: Boolean = false,
-    val output: String = "",
-    val error: String? = null
-)

@@ -5,17 +5,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.sephile.app.model.SearchType
+import com.sephile.app.model.ValueType
 import com.sephile.app.repository.MemoryRepository
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.launch
 
 @Composable
 fun ScannerScreen(
@@ -24,8 +19,6 @@ fun ScannerScreen(
     targetName: String,
     onBack: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
-
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
         androidx.compose.material3.TopAppBar(
             title = { Text(text = "Scanner") },
@@ -90,17 +83,15 @@ fun ScannerScreen(
         Row {
             Button(
                 onClick = {
-                    scope.launch {
-                        repo.firstScan(
-                            pid = targetPid,
-                            type = com.sephile.app.model.ValueType.DWORD,
-                            searchType = com.sephile.app.model.SearchType.EXACT,
-                            targetValue = 0,
-                            targetValueF = 0.0,
-                            fuzzyDelta = 0,
-                            onlyWritable = true
-                        )
-                    }
+                    repo.firstScan(
+                        pid = targetPid,
+                        type = ValueType.DWORD,
+                        searchType = SearchType.EXACT,
+                        targetValue = 0,
+                        targetValueF = 0.0,
+                        fuzzyDelta = 0,
+                        onlyWritable = true
+                    )
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
@@ -109,16 +100,14 @@ fun ScannerScreen(
             Spacer(modifier = Modifier.width(8.dp))
             Button(
                 onClick = {
-                    scope.launch {
-                        repo.nextScan(
-                            type = com.sephile.app.model.ValueType.DWORD,
-                            searchType = com.sephile.app.model.SearchType.EXACT,
-                            targetValue = 0,
-                            targetValueF = 0.0,
-                            fuzzyDelta = 0,
-                            onlyWritable = true
-                        )
-                    }
+                    repo.nextScan(
+                        type = ValueType.DWORD,
+                        searchType = SearchType.EXACT,
+                        targetValue = 0,
+                        targetValueF = 0.0,
+                        fuzzyDelta = 0,
+                        onlyWritable = true
+                    )
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
             ) {
@@ -127,27 +116,26 @@ fun ScannerScreen(
         }
         Spacer(modifier = Modifier.height(12.dp))
 
-        val countState = repo.candidateCount() // this is not a Flow, it's a plain Int
+        val count = repo.candidateCount()
         Text(
-            text = "$countState candidate(s)",
+            text = "$count candidate(s)",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(8.dp))
 
-        val count = repo.candidateCount()
         if (count > 0) {
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(vertical = 4.dp)
             ) {
-                items(0 until count, key = { it }) { index ->
+                items(count, key = { it }) { index ->
                     CandidateItem(
                         index = index,
                         address = repo.candidateAddress(index),
                         hex = repo.candidateHex(index),
-                        onEdit = {},
-                        onFreeze = {}
+                        onEdit = { },
+                        onFreeze = { }
                     )
                 }
             }

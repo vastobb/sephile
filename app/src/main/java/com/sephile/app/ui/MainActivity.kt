@@ -14,7 +14,6 @@ import com.sephile.app.di.Module
 import com.sephile.app.repository.MemoryRepository
 import com.sephile.app.repository.ProcessRepository
 import com.sephile.app.root.LuaRepository
-import com.sephile.app.root.RootManager
 import com.sephile.app.ui.theme.SephileTheme
 
 class MainActivity : ComponentActivity() {
@@ -64,19 +63,17 @@ private fun SephileNavigator(
                 containerColor = Color(0xFF0B0E14)
             )
         )
-    ) { padding ->
+    ) { _ ->
         when (screen) {
             Screen.Processes -> ProcessListScreen(
                 repo = processRepo,
-                onAttach = { pid, name ->
-                    screen = Screen.Scanner
-                }
+                onAttach = { _, _ -> }
             )
             Screen.Scanner -> ScannerScreen(
                 repo = memoryRepo,
                 targetPid = -1,
                 targetName = "",
-                onBack = { screen = Screen.Processes }
+                onBack = { }
             )
             Screen.LiveInspector -> LiveMemoryInspectorScreen(repo = memoryRepo)
             Screen.Lua -> ScriptEditorScreen(luaRepo = luaRepo)
