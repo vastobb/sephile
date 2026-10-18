@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="sephile_dark">#0A0D15</color>
+    <color name="sephile_surface">#141A28</color>
+    <color name="sephile_accent">#7CFC00</color>
+    <color name="sephile_accent_dim">#2E5E00</color>
+    <color name="sephile_error">#FF5555</color>
+    <color name="sephile_warning">#FFB86C</color>
+    <color name="sephile_success">#50FA7B</color>
+    <color name="sephile_on_surface">#E6E6E6</color>
+    <color name="sephile_on_surface_variant">#8A9096</color>
+</resources>

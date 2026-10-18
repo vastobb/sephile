@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<files-paths>
+    <files-path name="sephile_files" path="." />
+    <cache-path name="sephile_cache" path="." />
+    <external-cache-path name="sephile_external_cache" path="." />
+</files-paths>

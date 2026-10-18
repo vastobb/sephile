@@ -1,0 +1,15 @@
+<resources>
+    <style name="Theme.Sephile" parent="android:Theme.Material.DayNight.NoActionBar">
+        <item name="android:colorBackground">@color/sephile_dark</item>
+        <item name="android:colorSurface">@color/sephile_surface</item>
+        <item name="android:colorPrimary">@color/sephile_accent</item>
+        <item name="android:colorOnPrimary">@color/sephile_dark</item>
+        <item name="android:textColorPrimary">@color/sephile_on_surface</item>
+        <item name="android:textColorSecondary">@color/sephile_on_surface_variant</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <style name="Theme.Sephile.Splash" parent="Theme.Sephile">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+    </style>
+</resources>
