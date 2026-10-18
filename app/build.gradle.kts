@@ -80,8 +80,6 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.concurrent)
     implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.okio)
-    implementation(libs.coil.compose)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.tooling.preview)
