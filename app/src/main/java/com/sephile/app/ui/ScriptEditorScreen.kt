@@ -16,7 +16,7 @@ fun ScriptEditorScreen(luaRepo: LuaRepository) {
     val viewModel = remember { LuaViewModel(luaRepo) }
     val scope = rememberCoroutineScope()
 
-    var script by remember { mutableStateOf("") }
+    var script = ""
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
         androidx.compose.material3.TopAppBar(

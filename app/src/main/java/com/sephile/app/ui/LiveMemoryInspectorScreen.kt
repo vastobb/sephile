@@ -28,8 +28,8 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
     val viewModel = remember { LiveMemoryInspectorViewModel(repo) }
     val scope = rememberCoroutineScope()
 
-    val addressState = remember { mutableStateOf("") }
-    val lengthState = remember { mutableStateOf("64") }
+    var address = ""
+    var length = "64"
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
         androidx.compose.material3.TopAppBar(
@@ -59,9 +59,9 @@ fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
             Button(
                 onClick = {
                     scope.launch {
-                        val addrText = addressState.value.trim().removePrefix("0x").removePrefix("0X")
+                        val addrText = address.trim().removePrefix("0x").removePrefix("0X")
                         val longAddr = addrText.toLongOrNull() ?: -1L
-                        val len = lengthState.value.toIntOrNull() ?: 64
+                        val len = length.toIntOrNull() ?: 64
                         if (longAddr == -1L) {
                             viewModel.setError("Invalid address")
                         } else if (!viewModel.attached) {
