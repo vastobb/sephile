@@ -16,7 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.sephile.app.model.ProcessInfo
 import com.sephile.app.repository.ProcessRepository
-import kotlinx.coroutines.flow.collectAsState
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
 @Composable
@@ -25,8 +25,8 @@ fun ProcessListScreen(
     onAttach: (pid: Int, name: String) -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val processes by repo.observeProcesses().collectAsState()
-    val refreshState = remember { mutableStateOf(false) }
+    val processesState = repo.observeProcesses().collectAsState()
+    val processes = processesState.value
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text(

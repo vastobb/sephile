@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
             SephileTheme(darkTheme = true) {
                 forceSephileColors()
                 val rootState = rememberSaveable { mutableStateOf<Boolean>(!RootManager.isRootAvailable()) }
-                var showRootCheck by rootState
+                val showRootCheck = rootState.value
 
                 if (showRootCheck) {
                     RootGate(onRootConfirmed = { rootState.value = false })

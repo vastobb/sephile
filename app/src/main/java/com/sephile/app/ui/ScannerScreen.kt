@@ -9,12 +9,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.sephile.app.repository.MemoryRepository
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 
 @Composable
 fun ScannerScreen(
@@ -24,7 +25,6 @@ fun ScannerScreen(
     onBack: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val refreshState = remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
         androidx.compose.material3.TopAppBar(
@@ -37,25 +37,21 @@ fun ScannerScreen(
 
         val attached = repo.isAttached()
         val targetText = if (attached) "Attached: $targetName (PID $targetPid)" else "Not attached"
-        Chip(
+        Card(
             modifier = Modifier.fillMaxWidth(),
-            onClick = null,
-            label = {
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = targetText,
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White
                 )
-            }
-        )
-        Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            elevation = 0.dp
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
                 Row {
                     Text(
                         text = "Value type",
@@ -131,14 +127,15 @@ fun ScannerScreen(
         }
         Spacer(modifier = Modifier.height(12.dp))
 
-        val count = repo.candidateCount()
+        val countState = repo.candidateCount() // this is not a Flow, it's a plain Int
         Text(
-            text = "$count candidate(s)",
+            text = "$countState candidate(s)",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(8.dp))
 
+        val count = repo.candidateCount()
         if (count > 0) {
             LazyColumn(
                 modifier = Modifier.weight(1f),
@@ -173,7 +170,7 @@ private fun CandidateItem(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = 0.dp
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier.padding(12.dp).fillMaxWidth(),
@@ -198,27 +195,6 @@ private fun CandidateItem(
             TextButton(onClick = onFreeze) {
                 Text(text = "Freeze")
             }
-        }
-    }
-}
-
-private fun Chip(
-    modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null,
-    label: @Composable () -> Unit
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        elevation = 0.dp
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp).fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            label
         }
     }
 }

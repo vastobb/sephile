@@ -37,7 +37,7 @@ import kotlinx.coroutines.flow.update
 fun LiveMemoryInspectorScreen(repo: MemoryRepository) {
     val viewModel = remember { LiveMemoryInspectorViewModel(repo) }
     val ui: StateFlow<LiveMemoryInspectorUiState> = viewModel.ui
-    val uiState by ui.collectAsState()
+    val uiState = ui.value
     val scope = rememberCoroutineScope()
 
     val addressState = remember { mutableStateOf<String>("") }
