@@ -160,7 +160,7 @@ size_t ProcessMemory::read(uintptr_t addr, void* buf, size_t len) const {
     return total;
 }
 
-size_t ProcessMemory::write(uintptr_t addr, const void* buf, size_t len) {
+size_t ProcessMemory::write(uintptr_t addr, const void* buf, size_t len) const {
     if (!attached_) return 0;
     if (len == 0) return 0;
 
