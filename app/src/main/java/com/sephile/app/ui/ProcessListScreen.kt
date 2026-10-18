@@ -1,14 +1,10 @@
 package com.sephile.app.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -16,7 +12,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.sephile.app.model.ProcessInfo
 import com.sephile.app.repository.ProcessRepository
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
 @Composable
@@ -25,8 +20,7 @@ fun ProcessListScreen(
     onAttach: (pid: Int, name: String) -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val processesState = repo.observeProcesses().collectAsState(initialValue = emptyList<ProcessInfo>())
-    val processes = processesState.value
+    val processes = repo.listRunningProcesses()
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text(

@@ -6,8 +6,6 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,64 +44,15 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun RootGate(onRootConfirmed: @Composable () -> Unit) {
-    val rootAvailable = RootManager.isRootAvailable()
-
-    SephileTheme {
-        androidx.compose.material3.Scaffold(
-            topBar = TopAppBar(
-                title = { Text(text = "Sephile — Root Check") },
-                colors = TopAppBarDefaults.mediumTopAppBarColors(
-                    containerColor = Color(0xFF121826)
-                )
-            )
-        ) { padding ->
-            androidx.compose.foundation.layout.Column(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center
-            ) {
-                Text(
-                    text = if (rootAvailable) "Root detected" else "Root not detected",
-                    style = androidx.compose.material3.MaterialTheme.typography.headlineMedium,
-                    color = if (rootAvailable) Color(0xFF50FA7B) else Color(0xFFFF5555)
-                )
-                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Sephile requires root to read/write other processes' memory.",
-                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF9AA0A6)
-                )
-                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(24.dp))
-                androidx.compose.material3.Button(
-                    onClick = {
-                        RootManager.requestIgnoreBatteryOptimizations(
-                            androidx.compose.ui.platform.LocalContext.current
-                        )
-                        if (rootAvailable) onRootConfirmed()
-                    },
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF7CFC00)
-                    )
-                ) {
-                    Text(if (rootAvailable) "Continue" else "Retry root check")
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun SephileNavigator(
     processRepo: ProcessRepository,
     memoryRepo: MemoryRepository,
     luaRepo: LuaRepository
 ) {
     var screen by remember { mutableStateOf(Screen.Processes) }
-    var target by remember { mutableStateOf(Pair(-1, "")) }
 
     androidx.compose.material3.Scaffold(
-        topBar = TopAppBar(
+        topBar = androidx.compose.material3.TopAppBar(
             title = { Text(text = when (screen) {
                 Screen.Processes -> "Processes"
                 Screen.Scanner -> "Scanner"
@@ -111,7 +60,7 @@ private fun SephileNavigator(
                 Screen.Lua -> "Lua Scripts"
                 Screen.Settings -> "Settings"
             }) },
-            colors = TopAppBarDefaults.mediumTopAppBarColors(
+            colors = androidx.compose.material3.TopAppBarDefaults.mediumTopAppBarColors(
                 containerColor = Color(0xFF0B0E14)
             )
         )
@@ -120,14 +69,13 @@ private fun SephileNavigator(
             Screen.Processes -> ProcessListScreen(
                 repo = processRepo,
                 onAttach = { pid, name ->
-                    target = Pair(pid, name)
                     screen = Screen.Scanner
                 }
             )
             Screen.Scanner -> ScannerScreen(
                 repo = memoryRepo,
-                targetPid = target.first,
-                targetName = target.second,
+                targetPid = -1,
+                targetName = "",
                 onBack = { screen = Screen.Processes }
             )
             Screen.LiveInspector -> LiveMemoryInspectorScreen(repo = memoryRepo)
