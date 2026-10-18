@@ -22,7 +22,7 @@ fun ScannerScreen(
     onBack: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    var refresh by remember { mutableStateOf(false) }
+    val refreshState = remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().padding(12.dp)) {
         androidx.compose.material3.TopAppBar(

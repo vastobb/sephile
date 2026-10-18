@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.sephile.app.model.ProcessInfo
 import com.sephile.app.repository.ProcessRepository
+import kotlinx.coroutines.flow.collectAsState
 import kotlinx.coroutines.launch
 
 @Composable
@@ -24,7 +25,7 @@ fun ProcessListScreen(
 ) {
     val scope = rememberCoroutineScope()
     val processes by repo.observeProcesses().collectAsState()
-    var refresh by remember { mutableStateOf(false) }
+    val refreshState = remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text(
@@ -33,8 +34,6 @@ fun ProcessListScreen(
             color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.height(12.dp))
-
-        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(8.dp))
 
         if (processes.isEmpty()) {
             Text(text = "No processes found", style = MaterialTheme.typography.bodyMedium,
@@ -67,7 +66,7 @@ private fun ProcessListItem(process: ProcessInfo, onClick: () -> Unit) {
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
-        elevation = 0.dp
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier.padding(12.dp).fillMaxWidth(),
