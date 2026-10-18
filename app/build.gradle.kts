@@ -66,12 +66,6 @@ android {
             version = "3.22.1"
         }
     }
-
-    sourceSets {
-        main {
-            jniLibs.srcDirs(listOf("src/main/jniLibs"))
-        }
-    }
 }
 
 dependencies {
