@@ -17,7 +17,6 @@ import androidx.compose.ui.unit.dp
 import com.sephile.app.model.ProcessInfo
 import com.sephile.app.repository.ProcessRepository
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 
 @Composable
@@ -26,7 +25,7 @@ fun ProcessListScreen(
     onAttach: (pid: Int, name: String) -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val processesState = repo.observeProcesses().collectAsState()
+    val processesState = repo.observeProcesses().collectAsState(initialValue = emptyList())
     val processes = processesState.value
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {

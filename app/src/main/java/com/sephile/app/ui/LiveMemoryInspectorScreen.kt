@@ -155,8 +155,7 @@ class LiveMemoryInspectorViewModel(private val repo: MemoryRepository) {
     private val _ui = MutableStateFlow(LiveMemoryInspectorUiState())
     val ui: StateFlow<LiveMemoryInspectorUiState> = _ui
 
-    var targetPid: Int = 0
-        private set
+    val targetPid: Int = 0
 
     val attached: Boolean
         get() = repo.isAttached()
