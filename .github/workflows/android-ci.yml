@@ -50,17 +50,20 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
+      - name: Install Gradle 8.6
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.6-bin.zip -O /tmp/gradle.zip
+          unzip -q -o /tmp/gradle.zip -d $HOME
+          echo "$HOME/gradle-8.6/bin" >> $GITHUB_PATH
 
       - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon --console=plain
+        run: gradle :app:assembleDebug --no-daemon --console=plain
 
       - name: Run lint (debug)
-        run: ./gradlew :app:lintDebug --no-daemon --console=plain || true
+        run: gradle :app:lintDebug --no-daemon --console=plain || true
 
       - name: Run unit tests
-        run: ./gradlew :app:testDebugUnitTest --no-daemon --console=plain || true
+        run: gradle :app:testDebugUnitTest --no-daemon --console=plain || true
 
       - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
