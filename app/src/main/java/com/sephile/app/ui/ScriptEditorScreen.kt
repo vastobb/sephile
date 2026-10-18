@@ -9,8 +9,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.TextFieldValue
 import com.sephile.app.root.LuaRepository
 
@@ -99,7 +101,7 @@ fun ScriptEditorScreen(luaRepo: LuaRepository) {
     }
 }
 
-class LuaViewModel(private val repo: com.sephile.app.repository.LuaRepository) {
+class LuaViewModel(private val repo: LuaRepository) {
 
     private val _ui = MutableStateFlow(LuaUiState(loaded = repo.isLoaded()))
     val ui: StateFlow<LuaUiState> = _ui.asStateFlow()
