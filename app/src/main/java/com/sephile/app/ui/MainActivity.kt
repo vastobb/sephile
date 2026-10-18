@@ -4,9 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -33,10 +31,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             SephileTheme(darkTheme = true) {
                 forceSephileColors()
-                var showRootCheck by rememberSaveable { mutableStateOf<Boolean>(!RootManager.isRootAvailable()) }
+                val rootState = rememberSaveable { mutableStateOf<Boolean>(!RootManager.isRootAvailable()) }
+                var showRootCheck by rootState
 
                 if (showRootCheck) {
-                    RootGate(onRootConfirmed = { showRootCheck = false })
+                    RootGate(onRootConfirmed = { rootState.value = false })
                 } else {
                     SephileNavigator(
                         processRepo = processRepo,
@@ -63,7 +62,7 @@ private fun RootGate(onRootConfirmed: () -> Unit) {
         androidx.compose.material3.Scaffold(
             topBar = TopAppBar(
                 title = { Text(text = "Sephile — Root Check") },
-                colors = androidx.compose.material3.TopAppBarDefaults.smallTopAppBarColors(
+                colors = TopAppBarDefaults.mediumTopAppBarColors(
                     containerColor = Color(0xFF121826)
                 )
             )
@@ -109,8 +108,8 @@ private fun SephileNavigator(
     memoryRepo: MemoryRepository,
     luaRepo: LuaRepository
 ) {
-    var screen by rememberSaveable { mutableStateOf(Screen.Processes) }
-    var target by rememberSaveable { mutableStateOf(Pair(-1, "")) }
+    var screen by remember { mutableStateOf(Screen.Processes) }
+    var target by remember { mutableStateOf(Pair(-1, "")) }
 
     androidx.compose.material3.Scaffold(
         topBar = TopAppBar(
@@ -121,7 +120,7 @@ private fun SephileNavigator(
                 Screen.Lua -> "Lua Scripts"
                 Screen.Settings -> "Settings"
             }) },
-            colors = androidx.compose.material3.TopAppBarDefaults.mediumTopAppBarColors(
+            colors = TopAppBarDefaults.mediumTopAppBarColors(
                 containerColor = Color(0xFF0B0E14)
             )
         )
@@ -149,4 +148,13 @@ private fun SephileNavigator(
 
 private enum class Screen {
     Processes, Scanner, LiveInspector, Lua, Settings
+}
+
+@Composable
+private fun SettingsScreen() {
+    Text(
+        text = "Settings (coming soon)",
+        modifier = Modifier.fillMaxSize(),
+        style = androidx.compose.material3.MaterialTheme.typography.bodyLarge
+    )
 }
