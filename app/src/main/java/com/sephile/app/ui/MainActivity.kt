@@ -13,14 +13,12 @@ import androidx.compose.ui.unit.dp
 import com.sephile.app.di.Module
 import com.sephile.app.repository.MemoryRepository
 import com.sephile.app.repository.ProcessRepository
-import com.sephile.app.root.LuaRepository
 import com.sephile.app.ui.theme.SephileTheme
 
 class MainActivity : ComponentActivity() {
 
     private val processRepo = Module.processRepository(this)
     private val memoryRepo = Module.memoryRepository()
-    private val luaRepo = LuaRepository()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,6 +37,5 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         memoryRepo.release()
-        luaRepo.release()
     }
 }
