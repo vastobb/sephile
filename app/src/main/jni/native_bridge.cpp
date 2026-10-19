@@ -8,14 +8,11 @@
 
 using namespace sephile;
 
-// We keep a single global scanner instance for simplicity.
-// A production app would use a per-session registry (jlong handles).
-static MemoryScanner* g_scanner = nullptr;
-
+// Scanners are per-session: every nativeInit() returns a fresh instance that
+// the Kotlin side owns via its jlong handle (freed by nativeDestroy).
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_sephile_app_root_NativeBridge_nativeInit(JNIEnv* env, jobject /*thiz*/) {
-    if (!g_scanner) g_scanner = new MemoryScanner();
-    return reinterpret_cast<jlong>(g_scanner);
+    return reinterpret_cast<jlong>(new MemoryScanner());
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -25,7 +22,6 @@ Java_com_sephile_app_root_NativeBridge_nativeDestroy(JNIEnv* env, jobject /*thiz
         s->detach();
         delete s;
     }
-    if (g_scanner == s) g_scanner = nullptr;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL

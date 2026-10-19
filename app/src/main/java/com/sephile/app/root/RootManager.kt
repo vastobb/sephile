@@ -2,14 +2,10 @@ package com.sephile.app.root
 
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.provider.Settings
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlin.concurrent.thread
+import kotlinx.coroutines.withContext
 
 /**
  * Root & su availability checks. Sephile requires root to ptrace-attach into
@@ -17,8 +13,16 @@ import kotlin.concurrent.thread
  */
 object RootManager {
 
+    suspend fun isRootAvailableAsync(): Boolean = withContext(Dispatchers.IO) { isRootAvailable() }
+
     fun isRootAvailable(): Boolean {
-        return suBinaryExists() || canRunSu()
+        // su probe with a hard 5s timeout so an ungranted Magisk prompt can
+        // never hang the app's root gate.
+        val probe = SuShell.run("id", 5000)
+        if (probe.success && probe.stdout.contains("uid=0")) return true
+        // su binary exists but wasn't granted yet — still count as available
+        // so the gate lets the user in; attach errors surface later.
+        return suBinaryExists()
     }
 
     private fun suBinaryExists(): Boolean {
@@ -32,47 +36,15 @@ object RootManager {
         return suPaths.any { java.io.File(it).exists() }
     }
 
-    private fun canRunSu(): Boolean {
-        return try {
-            val proc = java.lang.Runtime.getRuntime().exec("su -c id")
-            val out = java.io.BufferedReader(
-                java.io.InputStreamReader(proc.inputStream)).readText()
-            proc.waitFor()
-            out.contains("uid=0")
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    fun isRootMgmtInstalled(): Boolean {
-        val pkgs = listOf(
-            "com.topjohnwu.magisk", "com.topjohnwu.magisk.debug",
-            "com.kuroiku.zygisk", "org.chainfire.supersu",
-            "me.phh.superuser", "com.koushikdutta.superuser"
-        )
-        // check via package manager would need context; keep simple here
-        return pkgs.any { p ->
-            try {
-                java.lang.Class.forName("android.app.Application")
-                false
-            } catch (_: Exception) {
-                false
-            }
-        }
-    }
-
     fun requestIgnoreBatteryOptimizations(context: Context) {
-        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                .setData(Uri.parse("package:${context.packageName}"))
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
-    }
-
-    fun runInBackground(scope: CoroutineScope, block: () -> Unit) {
-        scope.launch(Dispatchers.Default) {
-            thread(isDaemon = true, start = true) {
-                block()
-            }
+        try {
+            val intent = Intent(
+                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                Uri.parse("package:${context.packageName}")
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            // ACTION not available on this build — ignore.
         }
     }
 }

@@ -1,12 +1,15 @@
 package com.sephile.app.root
 
-import com.sephile.app.model.SearchType
-import com.sephile.app.model.ValueType
-
+/**
+ * Thin JNI proxy for `libsephile_jni.so`.
+ *
+ * The library is loaded once, lazily, and guarded: a missing or incompatible
+ * native library (wrong ABI, corrupted APK, etc.) can never crash the app.
+ * Callers MUST check [loaded] before invoking any `native*` entry point.
+ */
 class NativeBridge {
-    init {
-        System.loadLibrary("sephile_jni")
-    }
+
+    val loaded: Boolean get() = Companion.loaded
 
     external fun nativeInit(): Long
     external fun nativeDestroy(handle: Long)
@@ -31,4 +34,20 @@ class NativeBridge {
     external fun nativeLuaExec(handle: Long, script: String): String
     external fun nativeLuaBindApi(handle: Long): Boolean
     external fun nativePeekMemory(handle: Long, address: Long, length: Int): ByteArray?
+
+    companion object {
+        /** True once `libsephile_jni.so` was successfully dlopen'ed. */
+        @JvmStatic
+        val loaded: Boolean = try {
+            System.loadLibrary("sephile_jni")
+            true
+        } catch (t: Throwable) {
+            false
+        }
+
+        /** Human readable reason when [loaded] is false (for diagnostics UI). */
+        @JvmStatic
+        val loadError: String = if (loaded) "" else
+            "Native engine unavailable — the device ABI may not be supported."
+    }
 }

@@ -1,6 +1,7 @@
 package com.sephile.app.di
 
 import android.content.Context
+import com.sephile.app.repository.LuaRepository
 import com.sephile.app.repository.MemoryRepository
 import com.sephile.app.repository.ProcessRepository
 import kotlinx.coroutines.Dispatchers
@@ -14,7 +15,7 @@ object Module {
 
     fun memoryRepository(): MemoryRepository = MemoryRepository()
 
-    val dispatcher = Dispatchers.Default
-    val supervisorJob = SupervisorJob()
-    val coroutineScope = CoroutineScope(supervisorJob + Dispatchers.Default)
+    fun luaRepository(): LuaRepository = LuaRepository()
+
+    val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 }
