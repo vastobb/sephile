@@ -45,7 +45,7 @@ class LuaRepository {
             try {
                 when (p[0].lowercase()) {
                     "attach" -> {
-                        val pid = p.getOrNull(1)?.toIntOrNull() ?: return@forEach sb.appendLine("attach: need a pid")
+                        val pid = p.getOrNull(1)?.toIntOrNull() ?: run { sb.appendLine("attach: need a pid"); return@forEach }
                         val ok = attach(pid)
                         sb.appendLine(if (ok) "attached to pid $pid" else "attach failed")
                     }
@@ -57,25 +57,25 @@ class LuaRepository {
                         if (procs.size > 30) sb.appendLine("  …")
                     }
                     "scan" -> {
-                        val v = p.getOrNull(1) ?: return@forEach sb.appendLine("scan: need a value")
+                        val v = p.getOrNull(1) ?: run { sb.appendLine("scan: need a value"); return@forEach }
                         val writable = (p.getOrNull(3) ?: "writable") != "all"
                         val r = RootSession.request("SCAN 0 ${typeId(p.getOrNull(2))} 0 $v 0.0 0 ${if (writable) "1" else "0"} ${attachedPid}")
                         sb.appendLine("scan -> $r candidate(s)")
                     }
                     "next" -> {
-                        val v = p.getOrNull(1) ?: return@forEach sb.appendLine("next: need a value")
+                        val v = p.getOrNull(1) ?: run { sb.appendLine("next: need a value"); return@forEach }
                         val r = RootSession.request("SCAN 1 ${typeId(p.getOrNull(2))} 0 $v 0.0 0 1 -1")
                         sb.appendLine("next -> $r candidate(s)")
                     }
                     "peek" -> {
-                        val a = hexToLong(p.getOrNull(1)) ?: return@forEach sb.appendLine("peek: bad addr")
+                        val a = hexToLong(p.getOrNull(1)) ?: run { sb.appendLine("peek: bad addr"); return@forEach }
                         val len = p.getOrNull(2)?.toIntOrNull() ?: 16
                         val hex = RootSession.request("PEEK $a $len")
                         sb.appendLine(hex.chunked(2).joinToString(" "))
                     }
                     "poke" -> {
-                        val a = hexToLong(p.getOrNull(1)) ?: return@forEach sb.appendLine("poke: bad addr")
-                        val v = p.getOrNull(2) ?: return@forEach sb.appendLine("poke: need value")
+                        val a = hexToLong(p.getOrNull(1)) ?: run { sb.appendLine("poke: bad addr"); return@forEach }
+                        val v = p.getOrNull(2) ?: run { sb.appendLine("poke: need value"); return@forEach }
                         val r = RootSession.request("POKE $a ${typeId(p.getOrNull(3))} $v 0.0")
                         sb.appendLine(if (r == "1") "poked" else "poke failed")
                     }
