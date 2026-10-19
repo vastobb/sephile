@@ -37,7 +37,6 @@ class NativeBridge {
 
     companion object {
         /** True once `libsephile_jni.so` was successfully dlopen'ed. */
-        @JvmStatic
         val loaded: Boolean = try {
             System.loadLibrary("sephile_jni")
             true
@@ -46,7 +45,6 @@ class NativeBridge {
         }
 
         /** Human readable reason when [loaded] is false (for diagnostics UI). */
-        @JvmStatic
         val loadError: String = if (loaded) "" else
             "Native engine unavailable — the device ABI may not be supported."
     }
