@@ -1,12 +1,12 @@
 package com.sephile.app.ui.theme
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.Typography
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val DarkColors = darkColorScheme(
+private val Dark = darkColorScheme(
     primary = Color(0xFF7CFC00),
     onPrimary = Color(0xFF08110A),
     secondary = Color(0xFF50FA7B),
@@ -25,12 +25,6 @@ private val DarkColors = darkColorScheme(
     outlineVariant = Color(0xFF2A344D)
 )
 
-/** Sephile's signature dark "hacker" theme. */
 @Composable
-fun SephileTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = DarkColors,
-        typography = Typography(),
-        content = content
-    )
-}
+fun AppTheme(content: @Composable () -> Unit) =
+    MaterialTheme(colorScheme = Dark, typography = Typography(), content = content)

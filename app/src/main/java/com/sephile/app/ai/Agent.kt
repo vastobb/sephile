@@ -1,292 +1,198 @@
 package com.sephile.app.ai
 
-import com.sephile.app.model.SearchType
-import com.sephile.app.model.ValueType
-import com.sephile.app.repository.MemoryRepository
-import com.sephile.app.repository.ProcessRepository
+import com.sephile.app.engine.Engine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * The AI agent: exposes the memory engine to a chat model as *real tools*.
+ * Gives the chat model real tools over the memory engine: find Minecraft,
+ * attach, value-scan / refine, AOB signature scan, read/write/freeze memory.
  *
- * The model can list processes, attach, run value scans, refine them, do AOB
- * signature scans, read/write/freeze memory. So when the user says "I have 64
- * grass blocks, help me find where that's stored," the model actually drives
- * the scanner: scan 64 → user drops to 63 → next_scan → narrow → write.
- *
- * This is the honest version of "AI finds the address and edits memory": it does
- * it through the same scan/refine workflow a human would, not magic.
+ * The model drives the same scan→narrow→write workflow a human would — that's
+ * how it "finds the offset/address and edits it." No magic; real scanner.
  */
-class Agent(
-    private val memory: MemoryRepository,
-    private val processes: ProcessRepository,
-    private val targetPackage: String = "com.mojang.minecraftpe"
-) {
+class Agent(private val defaultPkg: String) {
 
-    /** Built once — the tool catalog handed to the model. */
     val tools: JSONArray = buildTools()
 
-    /** Run one full assistant turn, executing tool calls until it produces text. */
-    suspend fun run(history: JSONArray, apiKey: String, baseUrl: String, model: String): String =
+    suspend fun run(history: JSONArray, key: String, base: String, model: String): String =
         withContext(Dispatchers.IO) {
             var guard = 0
             while (guard++ < 8) {
-                when (val res = LlmClient.chat(baseUrl, apiKey, model, history, tools)) {
-                    is ChatResult.Text -> return@withContext res.text
-                    is ChatResult.NeedsTools -> {
-                        if (res.assistantContent != null) {
-                            history.put(assistantMsg(res.assistantContent, res.calls))
-                        } else {
-                            history.put(assistantMsg(null, res.calls))
-                        }
-                        for (call in res.calls) {
-                            val out = try { execute(call.name, call.argumentsJson) }
-                                      catch (t: Throwable) { "ERROR: ${t.message}" }
-                            history.put(toolMsg(call.id, out))
+                when (val res = Llm.chat(base, key, model, history, tools)) {
+                    is Llm.Round.Text -> return@withContext res.text
+                    is Llm.Round.NeedsTools -> {
+                        history.put(assistant(res.content, res.calls))
+                        for (c in res.calls) {
+                            val out = try { exec(c.name, c.args) } catch (t: Throwable) { "ERROR: ${t.message}" }
+                            history.put(tool(c.id, out))
                         }
                     }
                 }
             }
-            "Reached the step limit for this turn."
+            "Step limit reached for this turn."
         }
 
-    // ── Tool execution ──────────────────────────────────────────────────────
-    private fun execute(name: String, argsJson: String): String {
-        val a = try { JSONObject(if (argsJson.isBlank()) "{}" else argsJson) } catch (t: Throwable) { JSONObject() }
+    private fun exec(name: String, argJson: String): String {
+        val a = try { JSONObject(argJson.ifBlank { "{}" }) } catch (t: Throwable) { JSONObject() }
         return when (name) {
-            "list_processes" -> listProcesses()
-            "attach" -> {
+            "find_minecraft" -> {
                 val pid = a.optInt("pid", -1)
-                if (pid <= 0) "Need a pid. Use list_processes first."
-                else if (memory.attach(pid)) "Attached to pid $pid." else "Attach to $pid failed."
+                val target = if (pid > 0) pid else runCatching {
+                    kotlinx.coroutines.runBlocking { Engine.autoAttachMinecraft() }
+                }.getOrDefault(-1)
+                if (target > 0) "Found Minecraft, attached to pid $target." else "Minecraft isn't running (or attach failed)."
             }
-            "current_target" -> if (memory.isAttached()) "Attached to pid ${memory.targetPid}." else "Not attached."
-            "scan" -> doScan(first = true, a)
-            "next_scan" -> doScan(first = false, a)
-            "candidate_count" -> "${memory.candidateCount} candidate(s)"
-            "get_candidates" -> getCandidates(a.optInt("limit", 20))
+            "engine_status" -> {
+                val pid = Engine.targetPid.value
+                if (pid > 0) "Attached to Minecraft pid $pid." else "Not attached."
+            }
+            "scan" -> scan(first = true, a)
+            "next_scan" -> scan(first = false, a)
+            "candidate_count" -> "${Engine.request("COUNT")} candidate(s)"
+            "get_candidates" -> candidates(a.optInt("limit", 20))
             "read_memory" -> {
                 val addr = a.optLong("address", 0L)
                 val len = a.optInt("length", 16).coerceIn(1, 4096)
-                val hex = memory.peekHex(addr, len)
-                if (hex.isEmpty()) "Could not read $len bytes at 0x${addr.toString(16)}"
-                else hexToSpaced(hex)
+                val hex = Engine.request("PEEK $addr $len")
+                if (hex.isBlank()) "Cannot read at 0x${addr.toString(16)}" else spaced(hex)
             }
             "write_memory" -> {
                 val addr = a.optLong("address", 0L)
-                val type = typeOf(a.optString("type", "dword"))
-                val text = a.optString("value", "")
-                val (ok, msg) = memory.editValueFromText(addr, type, text)
-                if (ok) "Wrote $text (${type.label}) to 0x${addr.toString(16)}." else "Write failed: $msg"
+                val type = a.optString("type", "dword")
+                val value = a.optString("value", "")
+                val iv: Long; var fv = 0.0
+                if (type == "float" || type == "double") { fv = value.toDoubleOrNull() ?: 0.0; iv = 0L }
+                else iv = value.toLongOrNull() ?: 0L
+                val ok = Engine.request("POKE $addr ${typeId(type)} $iv $fv") == "1"
+                if (ok) "Wrote $value to 0x${addr.toString(16)}." else "Write failed."
             }
             "freeze" -> {
                 val addr = a.optLong("address", 0L)
-                val type = typeOf(a.optString("type", "dword"))
-                val enable = a.optBoolean("enable", true)
+                val type = a.optString("type", "dword")
                 val value = a.optString("value", "0")
-                memory.freeze(addr, enable, value, type)
-                if (enable) "Froze 0x${addr.toString(16)} at $value." else "Unfroze 0x${addr.toString(16)}."
+                val en = a.optBoolean("enable", true)
+                val iv: Long; var fv = 0.0
+                if (type == "float" || type == "double") { fv = value.toDoubleOrNull() ?: 0.0; iv = 0L }
+                else iv = value.toLongOrNull() ?: 0L
+                Engine.request("FREEZE $addr ${if (en) 1 else 0} ${typeId(type)} $iv $fv")
+                if (en) "Freezing 0x${addr.toString(16)} at $value." else "Unfroze."
             }
             "pattern_scan" -> {
-                val pat = a.optString("pattern", "")
-                val hits = memory.patternScan(pat)
-                if (hits.isEmpty()) "No matches for pattern."
-                else "Found ${hits.size} match(es):\n" +
-                    hits.take(50).joinToString("\n") { "0x" + it.toString(16) }
+                val hits = Engine.requestMulti("PATTERNSCAN ${a.optString("pattern", "")}")
+                if (hits.isEmpty()) "No matches."
+                else "Found ${hits.size}:\n" + hits.take(50).joinToString("\n")
             }
             "read_maps" -> {
-                val maps = memory.readableMaps()
-                if (maps.isEmpty()) "No maps (not attached?)"
-                else "${maps.size} readable region(s):\n" + maps.take(60).joinToString("\n")
+                val maps = Engine.requestMulti("MAPS")
+                if (maps.isEmpty()) "No maps." else "${maps.size} regions:\n" + maps.take(60).joinToString("\n")
             }
             else -> "Unknown tool '$name'."
         }
     }
 
-    private fun listProcesses(): String {
-        val procs = runCatching {
-            kotlinx.coroutines.runBlocking { processes.listRunningProcesses() }
-        }.getOrDefault(emptyList())
-        if (procs.isEmpty()) return "No processes. Is the engine running?"
-        val mc = procs.firstOrNull { it.name.contains(targetPackage, true) }
-        val others = procs.filter { it !== mc }.take(40)
-        val sb = StringBuilder()
-        if (mc != null) sb.appendLine("MINECRAFT: pid=${mc.pid} ${mc.name}")
-        sb.appendLine("Other processes:")
-        others.forEach { sb.appendLine("  pid=${it.pid} ${it.name}") }
-        return sb.toString()
-    }
-
-    private fun doScan(first: Boolean, a: JSONObject): String {
-        if (!memory.isAttached()) return "Not attached. Call attach first."
-        val type = typeOf(a.optString("type", "dword"))
-        val search = searchOf(a.optString("search", "exact"))
+    private fun scan(first: Boolean, a: JSONObject): String {
+        if (Engine.targetPid.value <= 0) return "Not attached. Use find_minecraft first."
+        val type = a.optString("type", "dword")
+        val search = a.optString("search", "exact")
         val raw = a.optString("value", "")
-        val asFloat = type == ValueType.FLOAT || type == ValueType.DOUBLE
-        val tval = if (asFloat) 0L else (raw.toLongOrNull() ?: 0L)
-        val tfval = if (asFloat) (raw.toDoubleOrNull() ?: 0.0) else 0.0
-        if (search == SearchType.EXACT && raw.isNotBlank() && !asFloat && raw.toLongOrNull() == null)
-            return "'$raw' is not a valid ${type.label} number."
-        val ok = if (first) {
-            memory.firstScan(memory.targetPid, type, search, tval, tfval, 0L, onlyWritable = true)
-        } else {
-            memory.nextScan(type, search, tval, tfval, 0L, onlyWritable = true)
-        }
-        val count = memory.candidateCount
-        return if (ok) "${if (first) "First" else "Next"} scan (${type.label}, $search) → $count candidate(s)."
-        else "Scan failed."
+        val isF = type == "float" || type == "double"
+        val tv = if (isF) 0L else (raw.toLongOrNull() ?: 0L)
+        val tf = if (isF) (raw.toDoubleOrNull() ?: 0.0) else 0.0
+        val phase = if (first) 0 else 1
+        Engine.request("SCAN $phase ${typeId(type)} ${searchId(search)} $tv $tf 1")
+        val count = Engine.request("COUNT")
+        return "${if (first) "First" else "Next"} scan ($type/$search) → $count candidate(s)."
     }
 
-    private fun getCandidates(limit: Int): String {
-        val count = memory.candidateCount
-        if (count == 0) return "No candidates. Run a scan."
+    private fun candidates(limit: Int): String {
+        val count = Engine.request("COUNT").toIntOrNull() ?: 0
+        if (count == 0) return "No candidates yet."
         val n = minOf(limit, count, 50)
-        val sb = StringBuilder("$count candidate(s). First $n:\n")
+        val sb = StringBuilder("$count candidates. First $n:\n")
         for (i in 0 until n) {
-            val addr = memory.candidateAddress(i)
-            val hex = memory.candidateHex(i)
-            sb.appendLine("  0x${addr.toString(16)}  $hex")
+            val parts = Engine.request("CANDIDATE $i").split(' ')
+            sb.appendLine("  0x${parts.getOrNull(0) ?: "?"}  ${parts.getOrNull(1) ?: ""}")
         }
         if (count > n) sb.append("  … ${count - n} more")
         return sb.toString()
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────────────
-    private fun typeOf(s: String): ValueType = when (s.lowercase()) {
-        "byte" -> ValueType.BYTE
-        "short" -> ValueType.SHORT
-        "qword" -> ValueType.QWORD
-        "float" -> ValueType.FLOAT
-        "double" -> ValueType.DOUBLE
-        else -> ValueType.DWORD
+    private fun typeId(t: String) = when (t.lowercase()) {
+        "byte" -> 0; "short" -> 1; "qword" -> 3; "float" -> 4; "double" -> 5; else -> 2
     }
-
-    private fun searchOf(s: String): SearchType = when (s.lowercase()) {
-        "unknown", "unknown_initial" -> SearchType.UNKNOWN
-        "changed", "fuzzy" -> SearchType.FUZZY
-        "greater", "greater_than", ">" -> SearchType.GREATER_THAN
-        "less", "less_than", "<" -> SearchType.LESS_THAN
-        else -> SearchType.EXACT
+    private fun searchId(s: String) = when (s.lowercase()) {
+        "unknown" -> 1; "changed" -> 2; "greater" -> 3; "less" -> 4; else -> 0
     }
+    private fun spaced(hex: String) = hex.chunked(2).joinToString(" ")
 
-    private fun hexToSpaced(hex: String): String =
-        hex.chunked(2).joinToString(" ")
-
-    // ── Message builders ────────────────────────────────────────────────────
-    private fun assistantMsg(content: String?, calls: List<ToolCall>): JSONObject {
-        val m = JSONObject().apply { put("role", "assistant") }
-        if (content != null) m.put("content", content) else m.put("content", JSONArray())
-        if (calls.isNotEmpty()) {
-            val arr = JSONArray()
-            for (c in calls) {
-                arr.put(JSONObject().apply {
-                    put("id", c.id)
-                    put("type", "function")
-                    put("function", JSONObject().apply {
-                        put("name", c.name)
-                        put("arguments", c.argumentsJson)
-                    })
-                })
-            }
-            m.put("tool_calls", arr)
-        }
-        return m
-    }
-
-    private fun toolMsg(id: String, content: String): JSONObject =
+    private fun assistant(content: String?, calls: List<Llm.TCall>): JSONObject =
         JSONObject().apply {
-            put("role", "tool")
-            put("tool_call_id", id)
-            put("content", content)
-        }
-
-    // ── Tool catalog ────────────────────────────────────────────────────────
-    private fun buildTools(): JSONArray {
-        fun fn(name: String, desc: String, props: JSONObject, required: List<String>): JSONObject =
-            JSONObject().apply {
-                put("type", "function")
-                put("function", JSONObject().apply {
-                    put("name", name)
-                    put("description", desc)
-                    put("parameters", JSONObject().apply {
-                        put("type", "object")
-                        put("properties", props)
-                        put("required", JSONArray(required))
+            put("role", "assistant")
+            put("content", content ?: JSONArray())
+            if (calls.isNotEmpty()) {
+                put("tool_calls", JSONArray().apply {
+                    for (c in calls) put(JSONObject().apply {
+                        put("id", c.id); put("type", "function")
+                        put("function", JSONObject().apply { put("name", c.name); put("arguments", c.args) })
                     })
                 })
             }
-        fun str(name: String, desc: String) = JSONObject().apply {
-            put("type", "string"); put("description", desc)
-        }
-        fun int(name: String, desc: String) = JSONObject().apply {
-            put("type", "integer"); put("description", desc)
-        }
-        fun bool(name: String, desc: String) = JSONObject().apply {
-            put("type", "boolean"); put("description", desc)
         }
 
-        val typeEnum = JSONArray(listOf("byte", "short", "dword", "qword", "float", "double"))
-        val searchEnum = JSONArray(listOf("exact", "unknown", "changed", "greater", "less"))
-        fun typed(name: String) = JSONObject().apply {
-            put("type", "string"); put("description", "Value type"); put("enum", typeEnum)
+    private fun tool(id: String, content: String) = JSONObject().apply {
+        put("role", "tool"); put("tool_call_id", id); put("content", content)
+    }
+
+    private fun buildTools(): JSONArray {
+        fun fn(name: String, desc: String, props: JSONObject, req: List<String>) = JSONObject().apply {
+            put("type", "function"); put("function", JSONObject().apply {
+                put("name", name); put("description", desc)
+                put("parameters", JSONObject().apply {
+                    put("type", "object"); put("properties", props); put("required", JSONArray(req))
+                })
+            })
+        }
+        fun s(n: String, d: String) = JSONObject().apply { put("type", "string"); put("description", d) }
+        fun i(n: String, d: String) = JSONObject().apply { put("type", "integer"); put("description", d) }
+        fun b(n: String, d: String) = JSONObject().apply { put("type", "boolean"); put("description", d) }
+        fun e(n: String, d: String, vals: List<String>) = JSONObject().apply {
+            put("type", "string"); put("description", d); put("enum", JSONArray(vals))
+        }
+        val types = listOf("byte", "short", "dword", "qword", "float", "double")
+        val searches = listOf("exact", "unknown", "changed", "greater", "less")
+        fun scanProps() = JSONObject().apply {
+            put("value", s("value", "Current in-game value (e.g. 64)"))
+            put("type", e("type", "Value type", types))
+            put("search", e("search", "Comparison", searches))
         }
 
         val t = JSONArray()
-        t.put(fn("list_processes", "List running processes, flagging Minecraft (com.mojang.minecraftpe).",
-            JSONObject(), emptyList()))
-        t.put(fn("attach", "Attach the memory engine to a process by pid. Do this before scanning.",
-            JSONObject().apply { put("pid", int("pid", "Process id to attach")) }, listOf("pid")))
-        t.put(fn("current_target", "Return the currently attached pid, if any.",
-            JSONObject(), emptyList()))
-        t.put(fn("scan", "FIRST scan: search all writable memory for a value. type=dword by default, " +
-            "search=exact. Use the current in-game value. Returns candidate count.",
+        t.put(fn("find_minecraft", "Locate and attach the running Minecraft process. Call this first.", JSONObject(), emptyList()))
+        t.put(fn("engine_status", "Report whether Minecraft is currently attached.", JSONObject(), emptyList()))
+        t.put(fn("scan", "FIRST value scan across writable memory. Returns candidate count.", scanProps(), listOf("value")))
+        t.put(fn("next_scan", "REFINE previous scan after the in-game value changes.", scanProps(), listOf("value")))
+        t.put(fn("candidate_count", "How many candidates remain.", JSONObject(), emptyList()))
+        t.put(fn("get_candidates", "List candidate addresses + bytes.",
+            JSONObject().apply { put("limit", i("limit", "Max to show")) }, emptyList()))
+        t.put(fn("read_memory", "Read bytes at an address (returns hex).",
+            JSONObject().apply { put("address", i("address", "Address")); put("length", i("length", "Bytes")) },
+            listOf("address")))
+        t.put(fn("write_memory", "Write a value to an address.",
             JSONObject().apply {
-                put("value", str("value", "The value currently shown in game (e.g. 64)"))
-                put("type", typed("type"))
-                put("search", JSONObject().apply {
-                    put("type", "string"); put("description", "How to compare"); put("enum", searchEnum)
-                })
-            }, listOf("value")))
-        t.put(fn("next_scan", "REFINE the previous scan. Only candidates that still match survive. " +
-            "Use after the in-game value changes.",
-            JSONObject().apply {
-                put("value", str("value", "The new in-game value"))
-                put("type", typed("type"))
-                put("search", JSONObject().apply {
-                    put("type", "string"); put("description", "How to compare"); put("enum", searchEnum)
-                })
-            }, listOf("value")))
-        t.put(fn("candidate_count", "How many candidates the current scan has.",
-            JSONObject(), emptyList()))
-        t.put(fn("get_candidates", "Show up to `limit` candidate addresses + their current bytes.",
-            JSONObject().apply { put("limit", int("limit", "Max to show (default 20)")) }, emptyList()))
-        t.put(fn("read_memory", "Read `length` bytes at a hex/decimal address and return hex.",
-            JSONObject().apply {
-                put("address", int("address", "Address (integer; pass as number)"))
-                put("length", int("length", "Bytes to read (1-4096)"))
-            }, listOf("address")))
-        t.put(fn("write_memory", "Write a value to an address. type=dword default.",
-            JSONObject().apply {
-                put("address", int("address", "Target address (number)"))
-                put("value", str("value", "Value to write"))
-                put("type", typed("type"))
+                put("address", i("address", "Address")); put("value", s("value", "Value"))
+                put("type", e("type", "Type", types))
             }, listOf("address", "value")))
-        t.put(fn("freeze", "Continuously re-write a value to an address (hold it). enable=false to stop.",
+        t.put(fn("freeze", "Hold a value at an address (enable=false to stop).",
             JSONObject().apply {
-                put("address", int("address", "Address (number)"))
-                put("value", str("value", "Value to hold"))
-                put("type", typed("type"))
-                put("enable", bool("enable", "true to freeze, false to unfreeze"))
+                put("address", i("address", "Address")); put("value", s("value", "Value"))
+                put("type", e("type", "Type", types)); put("enable", b("enable", "true/false"))
             }, listOf("address", "value")))
-        t.put(fn("pattern_scan", "AOB / signature scan: find a byte pattern across all readable memory. " +
-            "Space-separated hex bytes, ?? = wildcard (e.g. '48 89 5C 24 ?? 57').",
-            JSONObject().apply { put("pattern", str("pattern", "Byte pattern with ?? wildcards")) },
-            listOf("pattern")))
-        t.put(fn("read_maps", "Dump the target's readable memory regions (start-end perms).",
-            JSONObject(), emptyList()))
+        t.put(fn("pattern_scan", "AOB/signature scan: find a byte pattern ('48 89 5C 24 ?? 57', ??=wildcard).",
+            JSONObject().apply { put("pattern", s("pattern", "Byte pattern")) }, listOf("pattern")))
+        t.put(fn("read_maps", "Dump readable memory regions.", JSONObject(), emptyList()))
         return t
     }
 }

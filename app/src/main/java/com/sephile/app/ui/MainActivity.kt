@@ -3,127 +3,102 @@ package com.sephile.app.ui
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.sephile.app.di.Module
-import com.sephile.app.repository.LuaRepository
-import com.sephile.app.repository.MemoryRepository
-import com.sephile.app.repository.ProcessRepository
-import com.sephile.app.root.RootSession
-import com.sephile.app.root.SessionState
-import com.sephile.app.ui.theme.SephileTheme
+import com.sephile.app.SephileApp
+import com.sephile.app.ai.AiSettings
+import com.sephile.app.ai.ChatViewModel
+import com.sephile.app.engine.Engine
+import com.sephile.app.engine.EngineState
+import com.sephile.app.ui.theme.AppTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+private enum class Tab(val label: String, val icon: String) {
+    Chat("AI", "🤖"),
+    Scan("Scan", "🔎"),
+    Settings("Settings", "⚙️")
+}
+
 class MainActivity : ComponentActivity() {
-
-    private val processRepo = Module.processRepository()
-    private val memoryRepo = Module.memoryRepository()
-    private val luaRepo = Module.luaRepository()
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            SephileTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    SephileApp(processRepo, memoryRepo, luaRepo)
+            AppTheme {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    Root()
                 }
             }
         }
     }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        memoryRepo.release()
-        luaRepo.release()
-    }
-}
-
-private enum class Tab(val label: String) {
-    Chat("AI"),
-    Scanner("Scan"),
-    Overlay("Overlay"),
-    Settings("Settings")
 }
 
 @Composable
-private fun SephileApp(
-    processRepo: ProcessRepository,
-    memoryRepo: MemoryRepository,
-    luaRepo: LuaRepository
-) {
-    val context = LocalContext.current
+private fun Root() {
+    val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    val snackbar = remember { SnackbarHostState() }
-
+    val chatVm = remember { ChatViewModel(ctx.applicationContext) }
     var tab by remember { mutableStateOf(Tab.Chat) }
-    var targetPid by remember { mutableStateOf(-1) }
+    var crash by remember { mutableStateOf<String?>(null) }
 
-    val chatVm = remember {
-        com.sephile.app.ai.ChatViewModel(memoryRepo, processRepo, context.applicationContext)
-    }
-    var crashText by remember { mutableStateOf<String?>(null) }
-
-    // Boot the root engine exactly once.
+    // Boot engine + auto-attach Minecraft once.
     LaunchedEffect(Unit) {
-        crashText = com.sephile.app.SephileApp.lastCrash(context.filesDir)
-        RootSession.start(context)
+        crash = SephileApp.lastCrash(ctx.filesDir)
+        scope.launch(Dispatchers.IO) {
+            if (Engine.start(ctx)) Engine.autoAttachMinecraft()
+        }
     }
 
-    val sessionState by RootSession.state.collectAsState()
-    val sessionDetail by RootSession.detail.collectAsState()
+    val state by Engine.state.collectAsState()
+    val detail by Engine.detail.collectAsState()
+    val target by Engine.targetPid.collectAsState()
 
-    crashText?.let { text ->
+    crash?.let { text ->
         AlertDialog(
-            onDismissRequest = {
-                com.sephile.app.SephileApp.clearCrash(context.filesDir)
-                crashText = null
-            },
+            onDismissRequest = { SephileApp.clearCrash(ctx.filesDir); crash = null },
             title = { Text("The app crashed last run") },
-            text = {
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    com.sephile.app.SephileApp.clearCrash(context.filesDir)
-                    crashText = null
-                }) { Text("Dismiss") }
-            }
+            text = { Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) },
+            confirmButton = { TextButton({ SephileApp.clearCrash(ctx.filesDir); crash = null }) { Text("Dismiss") } }
         )
     }
 
-    when (sessionState) {
-        SessionState.STARTING -> GateLoading(sessionDetail)
-        SessionState.DISCONNECTED, SessionState.ERROR -> EngineGate(
-            detail = sessionDetail,
-            onRetry = { scope.launch(Dispatchers.IO) { RootSession.start(context) } }
-        )
-        SessionState.READY -> Scaffold(
-            snackbarHost = { SnackbarHost(hostState = snackbar) },
+    when (state) {
+        EngineState.STARTING -> Gate("Starting root engine…\n$detail")
+        EngineState.ERROR, EngineState.DOWN -> Gate("Engine not running\n$detail\n\nGrant root when prompted, then tap Retry.") {
+            scope.launch(Dispatchers.IO) { if (Engine.start(ctx)) Engine.autoAttachMinecraft() }
+        }
+        EngineState.UP -> Scaffold(
             bottomBar = {
                 NavigationBar {
                     Tab.entries.forEach { t ->
-                        NavigationBarItem(
-                            selected = tab == t,
-                            onClick = { tab = t },
-                            icon = { Text(text = tabIcon(t)) },
-                            label = { Text(text = t.label) }
-                        )
+                        NavigationBarItem(tab == t, { tab = t },
+                            icon = { Text(t.icon) }, label = { Text(t.label) })
                     }
                 }
             }
@@ -131,81 +106,32 @@ private fun SephileApp(
             Box(Modifier.padding(pad)) {
                 when (tab) {
                     Tab.Chat -> ChatScreen(chatVm)
-                    Tab.Scanner -> ScannerScreen(repo = memoryRepo, fallbackPid = targetPid)
-                    Tab.Overlay -> OverlayScreen()
+                    Tab.Scan -> ScanScreen()
                     Tab.Settings -> SettingsScreen()
                 }
             }
-        }
-    }
-}
-
-private fun tabIcon(t: Tab): String = when (t) {
-    Tab.Chat -> "🤖"
-    Tab.Scanner -> "🔎"
-    Tab.Overlay -> "🧿"
-    Tab.Settings -> "⚙️"
-}
-
-@Composable
-private fun GateLoading(detail: String) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        CircularProgressIndicator()
-        Spacer(Modifier.height(16.dp))
-        Text(text = "Starting root engine…", color = MaterialTheme.colorScheme.onBackground)
-        if (detail.isNotBlank()) {
-            Spacer(Modifier.height(8.dp))
-            Text(text = detail, style = MaterialTheme.typography.bodySmall, color = Color(0xFF9AA0A6))
-        }
-    }
-}
-
-@Composable
-private fun EngineGate(detail: String, onRetry: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(text = "🔐", style = MaterialTheme.typography.displayLarge)
-        Spacer(Modifier.height(16.dp))
-        Text(
-            text = "Root engine needed",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Spacer(Modifier.height(12.dp))
-        Text(
-            text = "Sephile reads game memory from a root daemon (uid 0), because an " +
-                "app process is blocked by SELinux/Yama from touching other apps.\n\n" +
-                "Grant Sephile superuser in Magisk / KernelSU / APatch, then retry.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF9AA0A6),
-            textAlign = TextAlign.Center
-        )
-        if (detail.isNotBlank()) {
-            Spacer(Modifier.height(16.dp))
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = detail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(12.dp)
-                )
+            // Small floating status line about attach state.
+            if (target <= 0 && state == EngineState.UP) {
+                LaunchedEffect(Unit) { Engine.autoAttachMinecraft() }
             }
         }
-        Spacer(Modifier.height(24.dp))
-        Button(onClick = onRetry) { Text(text = "Retry / request root") }
+    }
+}
+
+@Composable
+private fun Gate(msg: String, onRetry: (() -> Unit)? = null) {
+    Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator()
+                androidx.compose.foundation.layout.Spacer(Modifier.height(16.dp))
+                Text(msg, color = MaterialTheme.colorScheme.onBackground,
+                    style = MaterialTheme.typography.bodyMedium)
+                if (onRetry != null) {
+                    androidx.compose.foundation.layout.Spacer(Modifier.height(16.dp))
+                    TextButton(onRetry) { Text("Retry") }
+                }
+            }
+        }
     }
 }

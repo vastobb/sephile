@@ -3,32 +3,23 @@ package com.sephile.app.ai
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.sephile.app.repository.MemoryRepository
-import com.sephile.app.repository.ProcessRepository
-import kotlinx.coroutines.Dispatchers
+import com.sephile.app.engine.Engine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class Msg(val fromUser: Boolean, val text: String)
+data class ChatMsg(val mine: Boolean, val text: String)
 
-/**
- * Drives the AI chat: keeps the message history, hands each user turn to the
- * [Agent] which runs the tool loop against the memory engine.
- */
-class ChatViewModel(
-    private val memory: MemoryRepository,
-    processes: ProcessRepository,
-    private val appCtx: Context
-) : ViewModel() {
+/** Drives the AI chat: keeps history, hands each turn to the [Agent] tool loop. */
+class ChatViewModel(appCtx: Context) : ViewModel() {
 
-    private val agent = Agent(memory, processes, Settings.getTarget(appCtx))
+    private val ctx = appCtx.applicationContext
+    private val agent = Agent(AiSettings.pkg(ctx))
 
-    private val _msgs = MutableStateFlow<List<Msg>>(emptyList())
-    val msgs: StateFlow<List<Msg>> = _msgs
+    private val _msgs = MutableStateFlow<List<ChatMsg>>(emptyList())
+    val msgs: StateFlow<List<ChatMsg>> = _msgs
 
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy
@@ -38,65 +29,46 @@ class ChatViewModel(
     fun send(text: String) {
         val t = text.trim()
         if (t.isEmpty() || _busy.value) return
-        _msgs.value = _msgs.value + Msg(true, t)
+        _msgs.value = _msgs.value + ChatMsg(true, t)
         _busy.value = true
 
-        // First user message seeds a system prompt describing the tools' purpose.
-        if (history.length() == 0) {
-            history.put(JSONObject().apply {
-                put("role", "system")
-                put("content", SYSTEM_PROMPT)
-            })
-        }
-        history.put(JSONObject().apply {
-            put("role", "user")
-            put("content", t)
-        })
+        if (history.length() == 0)
+            history.put(JSONObject().put("role", "system").put("content", SYSTEM))
+        history.put(JSONObject().put("role", "user").put("content", t))
 
         viewModelScope.launch {
-            val key = Settings.getKey(appCtx)
-            val base = Settings.getBase(appCtx)
-            val model = Settings.getModel(appCtx)
+            val key = AiSettings.key(ctx); val base = AiSettings.base(ctx); val model = AiSettings.model(ctx)
             if (key.isBlank() || model.isBlank()) {
-                _msgs.value = _msgs.value + Msg(false,
-                    "Set your API key and pick a model in Settings first.")
-                _busy.value = false
-                return@launch
+                _msgs.value = _msgs.value + ChatMsg(false, "Add your API key and pick a model in Settings first.")
+                _busy.value = false; return@launch
             }
-            val reply = try {
-                agent.run(history, key, base, model)
-            } catch (e: Throwable) {
-                "Error: ${e.message}"
-            }
-            history.put(JSONObject().apply {
-                put("role", "assistant")
-                put("content", reply)
-            })
-            _msgs.value = _msgs.value + Msg(false, reply)
+            // Make sure the engine is up before the agent starts calling tools.
+            if (!Engine.isUp()) Engine.start(ctx)
+            val reply = try { agent.run(history, key, base, model) } catch (e: Throwable) { "Error: ${e.message}" }
+            history.put(JSONObject().put("role", "assistant").put("content", reply))
+            _msgs.value = _msgs.value + ChatMsg(false, reply)
             _busy.value = false
         }
     }
 
-    fun clearChat() {
+    fun clear() {
         _msgs.value = emptyList()
-        // Reset history but keep the system prompt on next send.
         while (history.length() > 0) history.remove(history.length() - 1)
     }
 
-    companion object {
-        private const val SYSTEM_PROMPT =
-            "You are Sephile, an AI memory-editing assistant embedded in a root Android app " +
-            "running alongside Minecraft Bedrock (com.mojang.minecraftpe). You control a real " +
-            "memory scanner via tools: value scan, refine (next_scan), AOB signature scan, " +
-            "read/write memory, and freeze. Use them to locate and edit in-game values.\n\n" +
-            "How to find a value (the standard workflow):\n" +
-            "1. attach to Minecraft's pid.\n" +
-            "2. Note the current in-game value (e.g. XP=64, health=20, a stack count).\n" +
-            "3. scan with that exact value (type dword unless you have reason to think float).\n" +
-            "4. Have the user change the value in-game, then next_scan with the new value.\n" +
-            "5. Repeat until few candidates remain; get_candidates to inspect; write_memory to set it.\n" +
-            "You can also pattern_scan with a byte signature (like '48 89 5C 24 ?? 57') to find code/\n" +
-            "structures, and read_maps to see memory layout. Be concise and always tell the user " +
-            "what in-game action to take next (e.g. 'drop the stack to 63, then tell me')."
+    private companion object {
+        const val SYSTEM =
+            "You are the AI inside Sephile, a root Android memory editor running alongside Minecraft " +
+            "Bedrock (com.mojang.minecraftpe). You control a real memory scanner via tools: value " +
+            "scan, refine, AOB signature scan, read/write/freeze memory.\n\n" +
+            "Always start a session with find_minecraft to attach.\n\n" +
+            "To find any in-game value (XP, health, coordinates, item counts):\n" +
+            "1. find_minecraft.\n" +
+            "2. Read the current value from the user (e.g. XP=64, stack=64).\n" +
+            "3. scan with exact value, type dword (use float if it looks like a float).\n" +
+            "4. Ask the user to change the value in-game, then next_scan with the new value.\n" +
+            "5. Repeat until few candidates; get_candidates to inspect; write_memory to set it.\n" +
+            "Use pattern_scan for byte signatures and read_maps for layout. Be concise, always say " +
+            "exactly what the user should do in-game next."
     }
 }

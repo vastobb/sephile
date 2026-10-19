@@ -33,26 +33,38 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.sephile.app.ai.ChatMsg
 import com.sephile.app.ai.ChatViewModel
-import com.sephile.app.ai.Msg
+import com.sephile.app.engine.Engine
 
 /**
- * AI chat. The model drives the memory scanner through tools (scan / refine /
- * read / write / freeze / pattern-scan), so you can say "help me find my XP"
- * and it runs the real scan-narrow workflow, telling you what to do in-game.
+ * AI chat. The model drives the memory scanner through real tools
+ * (find_minecraft / scan / refine / read / write / freeze / pattern-scan).
  */
 @Composable
 fun ChatScreen(vm: ChatViewModel) {
     val msgs by vm.msgs.collectAsState()
     val busy by vm.busy.collectAsState()
+    val engineState by Engine.state.collectAsState()
+    val target by Engine.targetPid.collectAsState()
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    LaunchedEffect(msgs.size) {
-        if (msgs.isNotEmpty()) listState.animateScrollToItem(msgs.size - 1)
-    }
+    LaunchedEffect(msgs.size) { if (msgs.isNotEmpty()) listState.animateScrollToItem(msgs.size - 1) }
 
     Column(Modifier.fillMaxSize()) {
+        // Status strip
+        Text(
+            when {
+                target > 0 -> "● Minecraft attached · pid $target"
+                engineState.name == "UP" -> "● Engine ready · tap Find Minecraft"
+                else -> "○ Engine starting…"
+            },
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+            color = if (target > 0) Color(0xFF3DDC84) else MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelMedium
+        )
+
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 10.dp),
@@ -62,8 +74,8 @@ fun ChatScreen(vm: ChatViewModel) {
                 item {
                     Text(
                         "Ask the AI to find & edit memory.\n\n" +
-                            "e.g. \"I have 64 grass blocks — find where that's stored\"\n" +
-                            "\"find my XP level and set it to 999\"\n" +
+                            "\"find my XP and set it to 999\"\n" +
+                            "\"I have 64 grass blocks — find where that's stored\"\n" +
                             "\"scan signature 48 89 5C 24 ?? 57\"",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -71,55 +83,35 @@ fun ChatScreen(vm: ChatViewModel) {
                 }
             }
             items(msgs) { m -> Bubble(m) }
-            if (busy) {
-                item {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.height(18.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(8.dp))
-                        Text("working…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+            if (busy) item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.height(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("working…", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
 
-        Row(
-            Modifier.fillMaxWidth().padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
-                value = input,
-                onValueChange = { input = it },
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("Message the AI…") },
-                maxLines = 4
+                value = input, onValueChange = { input = it },
+                modifier = Modifier.weight(1f), placeholder = { Text("Message the AI…") }, maxLines = 4
             )
             Spacer(Modifier.width(8.dp))
-            Button(
-                onClick = {
-                    val t = input
-                    input = ""
-                    vm.send(t)
-                },
-                enabled = !busy && input.isNotBlank()
-            ) { Text("Send") }
+            Button(onClick = { val t = input; input = ""; vm.send(t) }, enabled = !busy && input.isNotBlank()) {
+                Text("Send")
+            }
         }
     }
 }
 
 @Composable
-private fun Bubble(m: Msg) {
-    val bg = if (m.fromUser) MaterialTheme.colorScheme.surfaceVariant
-             else Color(0xFF14261A)
-    Box(
-        Modifier.fillMaxWidth(),
-        contentAlignment = if (m.fromUser) Alignment.CenterEnd else Alignment.CenterStart
-    ) {
+private fun Bubble(m: ChatMsg) {
+    val bg = if (m.mine) MaterialTheme.colorScheme.surfaceVariant else Color(0xFF14261A)
+    Box(Modifier.fillMaxWidth(), contentAlignment = if (m.mine) Alignment.CenterEnd else Alignment.CenterStart) {
         Text(
-            text = m.text,
-            Modifier
-                .widthIn(max = 320.dp)
-                .background(bg, RoundedCornerShape(12.dp))
-                .padding(10.dp),
+            m.text,
+            Modifier.widthIn(max = 320.dp).background(bg, RoundedCornerShape(12.dp)).padding(10.dp),
             color = MaterialTheme.colorScheme.onBackground,
             fontFamily = FontFamily.Monospace,
             style = MaterialTheme.typography.bodySmall
