@@ -59,12 +59,17 @@ class LuaRepository {
                     "scan" -> {
                         val v = p.getOrNull(1) ?: run { sb.appendLine("scan: need a value"); return@forEach }
                         val writable = (p.getOrNull(3) ?: "writable") != "all"
-                        val r = RootSession.request("SCAN 0 ${typeId(p.getOrNull(2))} 0 $v 0.0 0 ${if (writable) "1" else "0"} ${attachedPid}")
+                        val ty = typeId(p.getOrNull(2))
+                        // float/double values travel in the tfval slot, ints in tval
+                        val (tval, tfval) = if (ty == 4 || ty == 5) "0" to v else v to "0.0"
+                        val r = RootSession.request("SCAN 0 $ty 0 $tval $tfval 0 ${if (writable) "1" else "0"} ${attachedPid}")
                         sb.appendLine("scan -> $r candidate(s)")
                     }
                     "next" -> {
                         val v = p.getOrNull(1) ?: run { sb.appendLine("next: need a value"); return@forEach }
-                        val r = RootSession.request("SCAN 1 ${typeId(p.getOrNull(2))} 0 $v 0.0 0 1 -1")
+                        val ty = typeId(p.getOrNull(2))
+                        val (tval, tfval) = if (ty == 4 || ty == 5) "0" to v else v to "0.0"
+                        val r = RootSession.request("SCAN 1 $ty 0 $tval $tfval 0 1 -1")
                         sb.appendLine("next -> $r candidate(s)")
                     }
                     "peek" -> {

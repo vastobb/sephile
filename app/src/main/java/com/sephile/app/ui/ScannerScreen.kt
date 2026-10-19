@@ -156,7 +156,9 @@ private val LaunchScope = kotlinx.coroutines.CoroutineScope(
 
 /** Parse a user typed scan target; null when invalid for the requested type. */
 private fun parseTarget(text: String, type: ValueType, search: SearchType): Pair<Long, Double>? {
-    if (search != SearchType.EXACT) return 0L to 0.0
+    // UNKNOWN / FUZZY have no threshold — the daemon accepts any readable value.
+    // GREATER_THAN / LESS_THAN DO need the entered value as the comparison point.
+    if (search == SearchType.UNKNOWN || search == SearchType.FUZZY) return 0L to 0.0
     if (text.isEmpty()) return null
     val hex = text.startsWith("0x") || text.startsWith("0X")
     return when (type) {
