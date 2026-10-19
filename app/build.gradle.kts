@@ -56,6 +56,14 @@ android {
     }
 
     packaging {
+        jniLibs {
+            // Extract .so files to nativeLibraryDir (extractNativeLibs=true).
+            // The root daemon loads the engine via System.load(absolutePath) in
+            // app_process, which needs the .so on real filesystem — AGP 8's
+            // default (useLegacyPackaging=false) keeps libs inside the APK and
+            // leaves nativeLibraryDir empty.
+            useLegacyPackaging = true
+        }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
