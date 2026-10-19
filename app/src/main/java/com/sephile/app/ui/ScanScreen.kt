@@ -32,7 +32,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.sephile.app.engine.Engine
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Main
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -64,7 +63,7 @@ fun ScanScreen() {
                 val a = parts.getOrNull(0)?.toLongOrNull() ?: 0L
                 list.add(Cand(a, parts.getOrNull(1) ?: ""))
             }
-            withContext(kotlinx.coroutines.Main.immediate) { count = c; cands = list }
+            withContext(Dispatchers.Main.immediate) { count = c; cands = list }
         } catch (t: Throwable) { }
     }
 
@@ -80,11 +79,11 @@ fun ScanScreen() {
             try {
                 Engine.request("SCAN $phase $typeId $stId $tv $tf 1")
                 refresh()
-                withContext(kotlinx.coroutines.Main.immediate) {
+                withContext(Dispatchers.Main.immediate) {
                     status = "Done"; busy = false
                 }
             } catch (t: Throwable) {
-                withContext(kotlinx.coroutines.Main.immediate) {
+                withContext(Dispatchers.Main.immediate) {
                     status = "Error: ${t.message}"; busy = false
                 }
             }
