@@ -71,10 +71,11 @@ class MemoryRepository {
     }
 
     fun clearCandidates() {
-        // A fresh first scan resets the candidate list server-side.
+        // Drop scan results + freezes on the daemon but stay attached, so a fresh
+        // first scan can run immediately on the same process. (DETACH here would
+        // close /proc/<pid>/mem and force the user to re-pick the process.)
         if (!ready()) return
-        try { RootSession.request("DETACH") } catch (_: Throwable) {}
-        attachedPid = -1
+        try { RootSession.request("CLEAR") } catch (_: Throwable) {}
     }
 
     val candidateCount: Int

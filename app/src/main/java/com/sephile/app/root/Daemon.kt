@@ -126,6 +126,13 @@ object Daemon {
                             writer.println("OK")
                         }
                     }
+                    // Drop scan results + freezes but KEEP the attach (mem stays open),
+                    // so the user can run a fresh first scan on the same process.
+                    "CLEAR" -> {
+                        synchronized(stateLock) { candidates.clear() }
+                        synchronized(frozen) { frozen.clear() }
+                        writer.println("OK")
+                    }
                     "LISTPROCS" -> writeProcesses(writer)
                     "QUIT" -> { writer.println("OK BYE"); break }
                     else -> writer.println("ERR unknown command $cmd")
