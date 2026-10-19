@@ -1,32 +1,50 @@
 package com.sephile.app.ai
 
 import com.sephile.app.engine.Engine
+import com.sephile.app.engine.candFilter
+import com.sephile.app.engine.candRegions
+import com.sephile.app.engine.elf
+import com.sephile.app.engine.libsFull
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
 /**
  * Gives the chat model real tools over the memory engine: find Minecraft,
- * attach, value-scan / refine, AOB signature scan, read/write/freeze memory.
+ * attach, value-scan / refine, AOB signature scan, read/write/freeze memory,
+ * list loaded libraries, and resolve ELF symbols inside them.
  *
- * The model drives the same scan→narrow→write workflow a human would — that's
- * how it "finds the offset/address and edits it." No magic; real scanner.
+ * [trace] is a live log of every tool call the model makes — the UI renders it
+ * as "thinking" so you can watch it work.
  */
 class Agent(private val defaultPkg: String) {
 
     val tools: JSONArray = buildTools()
 
+    private val _trace = MutableStateFlow<List<String>>(emptyList())
+    val trace: StateFlow<List<String>> = _trace
+
+    private fun log(line: String) {
+        _trace.value = (_trace.value + line).takeLast(120)
+    }
+
+    fun clearTrace() { _trace.value = emptyList() }
+
     suspend fun run(history: JSONArray, key: String, base: String, model: String): String =
         withContext(Dispatchers.IO) {
             var guard = 0
-            while (guard++ < 8) {
+            while (guard++ < 10) {
                 when (val res = Llm.chat(base, key, model, history, tools)) {
                     is Llm.Round.Text -> return@withContext res.text
                     is Llm.Round.NeedsTools -> {
                         history.put(assistant(res.content, res.calls))
                         for (c in res.calls) {
+                            log("▸ ${c.name} ${compact(c.args)}")
                             val out = try { exec(c.name, c.args) } catch (t: Throwable) { "ERROR: ${t.message}" }
+                            log("  ↵ ${out.lineSequence().first().take(140)}")
                             history.put(tool(c.id, out))
                         }
                     }
@@ -89,6 +107,35 @@ class Agent(private val defaultPkg: String) {
                 val maps = Engine.requestMulti("MAPS")
                 if (maps.isEmpty()) "No maps." else "${maps.size} regions:\n" + maps.take(60).joinToString("\n")
             }
+            // ── library audit (attach to MC libs) ──────────────────────────
+            "list_libraries" -> {
+                val libs = Engine.libsFull()
+                if (libs.isEmpty()) "No native libraries loaded."
+                else "${libs.size} libs:\n" + libs.joinToString("\n")
+            }
+            "find_symbols" -> {
+                val lib = a.optString("lib", "minecraftpe")
+                val filter = a.optString("filter", "")
+                val syms = Engine.elf(lib, filter)
+                if (syms.isEmpty()) "No symbols matched in '$lib' (filter='$filter')."
+                else "Symbols in $lib (${syms.size}):\n" + syms.take(80).joinToString("\n")
+            }
+            // ── region-aware candidate triage (the "which of 800k is real" fix) ──
+            "cand_regions" -> {
+                val regions = Engine.candRegions()
+                // regions[0] = "total N", rest = "kind count"
+                val total = regions.firstOrNull()?.substringAfter(' ') ?: "0"
+                if (regions.size <= 1) "No candidates."
+                else "Total $total candidates. By region:\n" +
+                    regions.drop(1).joinToString("\n") +
+                    "\n(player state lives on heap/anon — use cand_filter to drop lib/file/stack noise)"
+            }
+            "cand_filter" -> {
+                val kind = a.optString("region", "heap")
+                val before = Engine.request("COUNT")
+                val res = Engine.candFilter(kind)
+                "$res (was $before before)"
+            }
             else -> "Unknown tool '$name'."
         }
     }
@@ -127,6 +174,8 @@ class Agent(private val defaultPkg: String) {
         "unknown" -> 1; "changed" -> 2; "greater" -> 3; "less" -> 4; else -> 0
     }
     private fun spaced(hex: String) = hex.chunked(2).joinToString(" ")
+    private fun compact(args: String) =
+        args.replace(Regex("\\s+"), " ").trim().take(100)
 
     private fun assistant(content: String?, calls: List<Llm.TCall>): JSONObject =
         JSONObject().apply {
@@ -193,6 +242,26 @@ class Agent(private val defaultPkg: String) {
         t.put(fn("pattern_scan", "AOB/signature scan: find a byte pattern ('48 89 5C 24 ?? 57', ??=wildcard).",
             JSONObject().apply { put("pattern", s("pattern", "Byte pattern")) }, listOf("pattern")))
         t.put(fn("read_maps", "Dump readable memory regions.", JSONObject(), emptyList()))
+        // ── library audit ──
+        t.put(fn("list_libraries", "List every native library (.so) loaded in Minecraft with its base address. " +
+            "Use this to see libminecraftpe.so and friends.", JSONObject(), emptyList()))
+        t.put(fn("find_symbols", "Resolve ELF symbols inside a loaded library by name substring. " +
+            "e.g. lib='minecraftpe', filter='Player' to find player-related functions. " +
+            "Returns runtime addresses (base + offset).", 
+            JSONObject().apply {
+                put("lib", s("lib", "Library name substring, e.g. 'minecraftpe'"))
+                put("filter", s("filter", "Symbol name substring, e.g. 'Health' (blank=all)"))
+            }, listOf("lib")))
+        // ── region triage ──
+        t.put(fn("cand_regions", "Histogram of current candidates by memory-region kind (heap/anon/lib/file/stack). " +
+            "Call this when a scan returns too many candidates to list — it shows WHERE they cluster so you can " +
+            "filter. Player state (health, XP, coords) lives on the HEAP, not inside read-only libraries.",
+            JSONObject(), emptyList()))
+        t.put(fn("cand_filter", "Keep only candidates in a given region kind. Use AFTER cand_regions to cut " +
+            "hundreds of thousands of candidates down to the ones that matter. " +
+            "region: 'heap', 'anon', 'lib', 'file', 'stack', or 'all'.",
+            JSONObject().apply { put("region", e("region", "Region kind to keep", 
+                listOf("heap", "anon", "lib", "file", "stack", "all"))) }, listOf("region")))
         return t
     }
 }

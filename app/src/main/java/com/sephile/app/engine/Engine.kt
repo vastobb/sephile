@@ -137,3 +137,18 @@ object Engine {
         _detail.value = msg
     }
 }
+
+// ── lib/audit + candidate helpers ──────────────────────────────────────────
+fun Engine.libs(): List<String> =
+    runBlocking { requestMulti("LIBS").map { it.substringBefore(" ") } }
+fun Engine.libsFull(): List<String> =
+    runBlocking { requestMulti("LIBS") }
+fun Engine.elf(lib: String, filter: String = ""): List<String> =
+    runBlocking {
+        val cmd = "ELF $lib${if (filter.isNotEmpty()) " $filter" else ""}"
+        requestMulti(cmd)
+    }
+fun Engine.candFilter(kind: String): String = runBlocking { request("CANDFILTER $kind") }
+fun Engine.candRegions(): List<String> = runBlocking { requestMulti("CANDREGIONS") }
+fun Engine.symbols(lib: String, filter: String = ""): List<String> =
+    elf(lib, filter)

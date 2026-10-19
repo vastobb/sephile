@@ -31,6 +31,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.sephile.app.engine.Engine
+import com.sephile.app.engine.candFilter
+import com.sephile.app.engine.candRegions
+import com.sephile.app.engine.libsFull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -53,6 +56,8 @@ fun ScanScreen() {
     var cands by remember { mutableStateOf<List<Cand>>(emptyList()) }
     var status by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+    var regionInfo by remember { mutableStateOf("") }
+    var libs by remember { mutableStateOf<List<String>>(emptyList()) }
 
     fun refresh() = scope.launch(Dispatchers.IO) {
         try {
@@ -64,6 +69,35 @@ fun ScanScreen() {
                 list.add(Cand(a, parts.getOrNull(1) ?: ""))
             }
             withContext(Dispatchers.Main.immediate) { count = c; cands = list }
+        } catch (t: Throwable) { }
+    }
+
+    fun regionBreakdown() = scope.launch(Dispatchers.IO) {
+        try {
+            val r = Engine.candRegions()
+            val total = r.firstOrNull()?.substringAfter(' ') ?: "0"
+            val info = r.drop(1).joinToString("  ")
+            withContext(Dispatchers.Main.immediate) { regionInfo = "total $total · $info" }
+        } catch (t: Throwable) { withContext(Dispatchers.Main.immediate) { regionInfo = "" } }
+    }
+
+    fun filterRegion(kind: String) {
+        busy = true; status = "Filtering $kind…"
+        scope.launch(Dispatchers.IO) {
+            try {
+                val res = Engine.candFilter(kind)
+                refresh()
+                withContext(Dispatchers.Main.immediate) { status = res; busy = false }
+            } catch (t: Throwable) {
+                withContext(Dispatchers.Main.immediate) { status = "Error: ${t.message}"; busy = false }
+            }
+        }
+    }
+
+    fun loadLibs() = scope.launch(Dispatchers.IO) {
+        try {
+            val l = Engine.libsFull()
+            withContext(Dispatchers.Main.immediate) { libs = l }
         } catch (t: Throwable) { }
     }
 
@@ -139,9 +173,41 @@ fun ScanScreen() {
 
         if (status.isNotBlank()) Text(status, style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        // ── region triage (the huge-candidate fix) ──────────────────────────
+        if (count > 200) {
+            Text("Too many candidates — filter by region:", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.tertiary)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                listOf("heap", "anon", "lib", "file", "all").forEach { k ->
+                    AssistChip(onClick = { filterRegion(k) }, label = { Text(k) })
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedButton(onClick = { regionBreakdown() }) { Text("Breakdown") }
+                Spacer(Modifier.width(8.dp))
+                if (regionInfo.isNotBlank()) Text(regionInfo, style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace)
+            }
+        }
+
         Text("$count candidate(s)", style = MaterialTheme.typography.labelMedium)
 
+        // ── libraries (attach to MC libs + audit) ───────────────────────────
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = { loadLibs() }, enabled = target > 0) { Text("Libs") }
+            Spacer(Modifier.width(8.dp))
+            if (libs.isNotEmpty()) Text("${libs.size} loaded (.so)", style = MaterialTheme.typography.labelSmall)
+        }
+
         LazyColumn(Modifier.weight(1f)) {
+            if (libs.isNotEmpty()) {
+                itemsIndexed(libs) { _, l ->
+                    Text(l, Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
             itemsIndexed(cands) { _, c ->
                 Text(
                     "0x${c.addr.toString(16).uppercase()}   ${c.hex.chunked(2).joinToString(" ")}",

@@ -1,6 +1,7 @@
 package com.sephile.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -37,14 +39,15 @@ import com.sephile.app.ai.ChatMsg
 import com.sephile.app.ai.ChatViewModel
 import com.sephile.app.engine.Engine
 
-/**
- * AI chat. The model drives the memory scanner through real tools
- * (find_minecraft / scan / refine / read / write / freeze / pattern-scan).
- */
+private val Green = Color(0xFF3DDC84)
+private val TraceBg = Color(0xFF0C1A10)
+
+/** AI chat — drives the memory scanner; shows a live "thinking" trace of tool calls. */
 @Composable
 fun ChatScreen(vm: ChatViewModel) {
     val msgs by vm.msgs.collectAsState()
     val busy by vm.busy.collectAsState()
+    val trace by vm.trace.collectAsState()
     val engineState by Engine.state.collectAsState()
     val target by Engine.targetPid.collectAsState()
     var input by remember { mutableStateOf("") }
@@ -57,11 +60,11 @@ fun ChatScreen(vm: ChatViewModel) {
         Text(
             when {
                 target > 0 -> "● Minecraft attached · pid $target"
-                engineState.name == "UP" -> "● Engine ready · tap Find Minecraft"
+                engineState.name == "UP" -> "● Engine ready"
                 else -> "○ Engine starting…"
             },
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-            color = if (target > 0) Color(0xFF3DDC84) else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (target > 0) Green else MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelMedium
         )
 
@@ -70,38 +73,94 @@ fun ChatScreen(vm: ChatViewModel) {
             modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            if (msgs.isEmpty()) {
-                item {
-                    Text(
-                        "Ask the AI to find & edit memory.\n\n" +
-                            "\"find my XP and set it to 999\"\n" +
-                            "\"I have 64 grass blocks — find where that's stored\"\n" +
-                            "\"scan signature 48 89 5C 24 ?? 57\"",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            if (msgs.isEmpty() && !busy) {
+                item { EmptyState(onPick = { input = it }) }
             }
             items(msgs) { m -> Bubble(m) }
-            if (busy) item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.height(18.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
-                    Text("working…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+            if (busy) {
+                item { WorkingTrace(trace) }
             }
         }
 
         Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = input, onValueChange = { input = it },
-                modifier = Modifier.weight(1f), placeholder = { Text("Message the AI…") }, maxLines = 4
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Ask the AI…  or /help") }, maxLines = 4
             )
             Spacer(Modifier.width(8.dp))
             Button(onClick = { val t = input; input = ""; vm.send(t) }, enabled = !busy && input.isNotBlank()) {
                 Text("Send")
             }
         }
+    }
+}
+
+/** Shown while the agent works: a live monospace log of every tool call. */
+@Composable
+private fun WorkingTrace(trace: List<String>) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(TraceBg, RoundedCornerShape(10.dp))
+            .padding(10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CircularProgressIndicator(Modifier.height(14.dp), strokeWidth = 2.dp, color = Green)
+            Spacer(Modifier.width(8.dp))
+            Text("thinking…", color = Green, style = MaterialTheme.typography.labelMedium)
+        }
+        if (trace.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            Column(Modifier.heightIn(max = 220.dp)) {
+                val shown = trace.takeLast(12)
+                shown.forEach { line ->
+                    Text(
+                        line,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyState(onPick: (String) -> Unit) {
+    Column {
+        Text(
+            "Ask the AI to find & edit memory.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(10.dp))
+        val chips = listOf(
+            "Find my XP and set it to 999",
+            "I have 64 grass blocks — find where that's stored",
+            "Set my health to 20.0",
+            "Show me Minecraft's loaded libraries",
+            "Scan signature 48 89 5C 24 ?? 57"
+        )
+        chips.forEach { c ->
+            Text(
+                "› $c",
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { onPick(c) }
+                    .padding(vertical = 4.dp),
+                color = Green,
+                fontFamily = FontFamily.Monospace,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Commands: /btw <note> · /libs · /status · /clear · /help",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

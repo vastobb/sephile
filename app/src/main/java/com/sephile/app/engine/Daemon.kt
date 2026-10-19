@@ -123,6 +123,14 @@ object Daemon {
                     }
                     "PATTERNSCAN" -> writePattern(out, p.drop(1).joinToString(" "))
                     "MAPS" -> writeMaps(out)
+                    // Loaded native libraries (for lib attach + audit).
+                    "LIBS" -> writeLibs(out)
+                    // ELF dynamic symbols of a loaded lib: ELF <pathname-contains> [filter]
+                    "ELF" -> writeElf(out, p.getOrNull(1) ?: "", p.getOrNull(2) ?: "")
+                    // Region-aware candidate filter: CANDFILTER heap|anon|lib|stack|file
+                    "CANDFILTER" -> out.println(candFilter(p.getOrNull(1) ?: "heap"))
+                    // Which region each top candidate lives in: regions for the last scan
+                    "CANDREGIONS" -> writeCandRegions(out)
                     "QUIT" -> { out.println("OK BYE"); break }
                     else -> out.println("ERR unknown $cmd")
                 }
@@ -302,6 +310,187 @@ object Daemon {
         out.println("END")
     }
 
+    /**
+     * Distinct loaded native libraries: "OK <n>" then "base addr-end .soName" then END.
+     * base = lowest mapped address of that lib (its ELF load base on Android).
+     */
+    private fun writeLibs(out: PrintStream) {
+        val rs = synchronized(lock) { if (pid > 0) parseMaps(pid) else emptyList() }
+            .filter { it.path.endsWith(".so") || it.path.contains(".so") }
+        // group by lib name → lowest start
+        val byName = LinkedHashMap<String, Long>()
+        for (r in rs) {
+            val name = r.path.substringAfterLast('/')
+            val cur = byName[name]
+            if (cur == null || r.start < cur) byName[name] = r.start
+        }
+        out.println("OK ${byName.size}")
+        for ((name, base) in byName) out.println("0x${base.toString(16)} $name")
+        out.println("END")
+    }
+
+    /**
+     * ELF dynamic-symbol lookup for a loaded lib: ELF <name-contains> [filter].
+     * Parses the ELF from the .so file on disk (root can read it) — finds the
+     * .dynsym/.dynstr sections and lists/returns matching symbols with their
+     * runtime addresses (base + st_value). This is how you "attach to MC libs."
+     *
+     * Returns "OK <n>" then "addr symbol" lines then END (capped).
+     */
+    private fun writeElf(out: PrintStream, nameNeedle: String, filter: String) {
+        if (nameNeedle.isBlank()) { out.println("ERR need lib name"); return }
+        // find the lib's mapped path + base
+        val maps = synchronized(lock) { if (pid > 0) parseMaps(pid) else emptyList() }
+        val entry = maps.firstOrNull { it.path.contains(nameNeedle) && it.path.endsWith(".so") }
+        if (entry == null) { out.println("ERR lib '$nameNeedle' not loaded"); return }
+        val libPath = entry.path
+        val base = maps.filter { it.path == libPath }.minOf { it.start }
+
+        val syms = try { parseDynSyms(libPath, base, filter) }
+                   catch (t: Throwable) { out.println("ERR elf: ${t.message}"); return }
+        out.println("OK ${syms.size}")
+        for ((addr, name) in syms.take(400)) out.println("0x${addr.toString(16)} $name")
+        out.println("END")
+    }
+
+    /**
+     * Parse an ELF64 .so's .dynsym/.dynstr. Returns (runtimeAddr, name) pairs.
+     * Reads the FILE (not memory) so it works without the section being mapped.
+     */
+    private fun parseDynSyms(path: String, base: Long, filter: String): List<Pair<Long, String>> {
+        RandomAccessFile(path, "r").use { r ->
+            val ident = ByteArray(16)
+            r.readFully(ident)
+            if (ident[0] != 0x7f.toByte() || ident[1] != 'E'.code.toByte() ||
+                ident[2] != 'L'.code.toByte() || ident[3] != 'F'.code.toByte())
+                throw IllegalStateException("not an ELF")
+            if (ident[4].toInt() != 2) throw IllegalStateException("ELF32 unsupported")
+
+            // ELF64: e_shoff @ 40, e_shentsize @ 58, e_shnum @ 60, e_shstrndx @ 62
+            r.seek(40); val shoff = readU64(r)
+            r.seek(58); val shentsize = readU16(r); val shnum = readU16(r); val shstrndx = readU16(r)
+            if (shnum == 0 || shoff == 0L) throw IllegalStateException("no section headers")
+
+            // Helper: field at explicit offset within section-header i
+            fun shdrField(i: Int, fieldOff: Int): Long {
+                r.seek(shoff + i.toLong() * shentsize + fieldOff)
+                return if (fieldOff >= 40) readU32(r) else readU64(r)
+            }
+            // Elf64_Shdr: sh_name@0, sh_offset@24, sh_size@32, sh_link@40
+
+            // section-name string table
+            val shstrOff = shdrField(shstrndx, 24)
+            val shstrSize = shdrField(shstrndx, 32)
+            val shstr = ByteArray(shstrSize.toInt().coerceAtMost(1 shl 20))
+            r.seek(shstrOff); r.readFully(shstr)
+
+            var symOff = -1L; var symSize = 0L; var strOff = -1L; var strSize = 0L
+            for (i in 0 until shnum) {
+                val nameOff = shdrField(i, 0).toInt()
+                val nm = cstr(shstr, nameOff)
+                if (nm == ".dynsym" || (nm == ".symtab" && symOff < 0)) {
+                    symOff = shdrField(i, 24)
+                    symSize = shdrField(i, 32)
+                    val link = shdrField(i, 40).toInt() // sh_link → strtab section index
+                    strOff = shdrField(link, 24)
+                    strSize = shdrField(link, 32)
+                    if (nm == ".dynsym") break
+                }
+            }
+            if (symOff < 0 || strOff < 0) throw IllegalStateException("no symtab")
+
+            val strtab = ByteArray(strSize.toInt().coerceAtMost(1 shl 22))
+            r.seek(strOff); r.readFully(strtab)
+
+            // Elf64_Sym (24B): st_name@0, st_value@8, st_size@16
+            val ent = 24L
+            val count = (symSize / ent).toInt()
+            val lf = filter.lowercase()
+            val out = ArrayList<Pair<Long, String>>()
+            for (i in 0 until count) {
+                val e = symOff + i * ent
+                r.seek(e); val stName = readU32(r).toInt()
+                val name = cstr(strtab, stName)
+                if (name.isEmpty()) continue
+                if (lf.isNotEmpty() && !name.lowercase().contains(lf)) continue
+                r.seek(e + 8); val stValue = readU64(r)
+                out.add((base + stValue) to name)
+                if (out.size >= 400) break
+            }
+            return out
+        }
+    }
+
+    private fun readU16(r: RandomAccessFile): Int { val b = ByteArray(2); r.readFully(b); return (b[0].toInt() and 0xFF) or ((b[1].toInt() and 0xFF) shl 8) }
+    private fun readU32(r: RandomAccessFile): Long { val b = ByteArray(4); r.readFully(b); var v = 0L; for (k in 3 downTo 0) v = (v shl 8) or (b[k].toLong() and 0xFF); return v }
+    private fun readU64(r: RandomAccessFile): Long { val b = ByteArray(8); r.readFully(b); var v = 0L; for (k in 7 downTo 0) v = (v shl 8) or (b[k].toLong() and 0xFF); return v }
+    private fun cstr(b: ByteArray, off: Int): String {
+        if (off < 0 || off >= b.size) return ""
+        var end = off
+        while (end < b.size && b[end].toInt() != 0) end++
+        return String(b, off, end - off, Charsets.UTF_8)
+    }
+
+    /**
+     * Region-aware candidate filter: CANDFILTER <heap|anon|lib|stack|file|all>.
+     * Keeps only candidates whose address falls in a matching region — the fix for
+     * "800k results, which is real?" Player state lives on the HEAP, not in libs.
+     */
+    private fun candFilter(kind: String): String {
+        synchronized(lock) {
+            if (pid <= 0) return "ERR not attached"
+            if (cands.isEmpty()) return "ERR no candidates"
+            val maps = parseMaps(pid)
+            fun kindOf(addr: Long): String {
+                val r = maps.firstOrNull { addr >= it.start && addr < it.end }
+                val p = r?.path ?: ""
+                return when {
+                    p == "[heap]" -> "heap"
+                    p == "[stack]" || p.startsWith("[stack") -> "stack"
+                    p.isEmpty() -> "anon"
+                    p.endsWith(".so") -> "lib"
+                    else -> "file"
+                }
+            }
+            val before = cands.size
+            val kept = if (kind == "all") cands.toList() else cands.filter { kindOf(it.addr) == kind }
+            cands.clear(); cands.addAll(kept)
+            return "OK $before -> ${cands.size} (kept $kind)"
+        }
+    }
+
+    /**
+     * Histogram of candidate addresses by memory-region kind: CANDREGIONS →
+     * "OK <total>" then "kind count" lines then END. This is the fix for
+     * "800k results, which is real?" — player state lives on the HEAP, not in
+     * read-only lib .text/.rodata, so the AI can see where they cluster.
+     */
+    private fun writeCandRegions(out: PrintStream) {
+        synchronized(lock) {
+            if (pid <= 0) { out.println("ERR not attached"); return }
+            val maps = parseMaps(pid)
+            fun kindOf(addr: Long): String {
+                val r = maps.firstOrNull { addr >= it.start && addr < it.end }
+                val p = r?.path ?: ""
+                return when {
+                    p == "[heap]" -> "heap"
+                    p.startsWith("[stack") -> "stack"
+                    p.isEmpty() -> "anon"
+                    p.endsWith(".so") -> "lib"
+                    else -> "file"
+                }
+            }
+            val counts = LinkedHashMap<String, Int>()
+            for (c in cands) { val k = kindOf(c.addr); counts[k] = (counts[k] ?: 0) + 1 }
+            // Header count MUST equal the number of data lines. Put the grand
+            // total on the first line so the client can read it.
+            out.println("OK ${counts.size + 1}")
+            out.println("total ${cands.size}")
+            for ((k, n) in counts) out.println("$k $n")
+            out.println("END")
+        }
+    }
+
     // ── helpers ─────────────────────────────────────────────────────────────
     private fun sizeOf(t: Int) = when (t) { BYTE->1; SHORT->2; DWORD, FLOAT->4; QWORD, DOUBLE->8; else->4 }
     private fun rd(b: ByteArray, i: Int, n: Int): Long {
@@ -316,7 +505,7 @@ object Daemon {
         FLOAT->toLe(fv.toFloat().toRawBits().toLong(),4); DOUBLE->toLe(fv.toRawBits(),8); else->toLe(iv,4)
     }
 
-    private class Rgn(val start: Long, val end: Long, val readable: Boolean, val writable: Boolean)
+    private class Rgn(val start: Long, val end: Long, val readable: Boolean, val writable: Boolean, val path: String)
     private fun parseMaps(pid: Int): List<Rgn> {
         val out = ArrayList<Rgn>()
         try {
@@ -327,7 +516,10 @@ object Daemon {
                 val e = l.substring(d+1, sp).toLongOrNull(16) ?: return@forEachLine
                 val perms = l.substring(sp+1, sp+5)
                 if (perms.length < 3) return@forEachLine
-                out.add(Rgn(s, e, perms[0]=='r', perms[1]=='w'))
+                // pathname = the rest after the 5th space-separated field (offset dev inode path)
+                val rest = l.substring(sp + 5).trim()
+                val path = rest.split(Regex("\\s+")).getOrElse(3) { "" }
+                out.add(Rgn(s, e, perms[0]=='r', perms[1]=='w', path))
             }
         } catch (t: Throwable) {}
         return out
