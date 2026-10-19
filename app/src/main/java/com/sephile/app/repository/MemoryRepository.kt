@@ -147,6 +147,30 @@ class MemoryRepository {
         } catch (t: Throwable) { null }
     }
 
+    /** Hex string read of [length] bytes at [address] ("" on failure). */
+    fun peekHex(address: Long, length: Int): String {
+        if (!ready() || length <= 0) return ""
+        return try { RootSession.request("PEEK $address $length") } catch (t: Throwable) { "" }
+    }
+
+    /**
+     * AOB / signature scan: find [pattern] (space-separated hex bytes, "??" = wildcard)
+     * across all readable regions. Returns matching start addresses.
+     */
+    fun patternScan(pattern: String): List<Long> {
+        if (!ready()) return emptyList()
+        return try {
+            RootSession.requestMulti("PATTERNSCAN $pattern")
+                .mapNotNull { it.trim().removePrefix("0x").toLongOrNull(16) }
+        } catch (t: Throwable) { emptyList() }
+    }
+
+    /** Readable memory regions as "start-end perms" strings. */
+    fun readableMaps(): List<String> {
+        if (!ready()) return emptyList()
+        return try { RootSession.requestMulti("MAPS") } catch (t: Throwable) { emptyList() }
+    }
+
     fun release() {
         attachedPid = -1
         RootSession.stop()

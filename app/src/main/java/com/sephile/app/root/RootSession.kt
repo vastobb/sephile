@@ -139,6 +139,26 @@ object RootSession {
         out
     }
 
+    /**
+     * Send [cmd] and read a "OK <n>" header, n lines, then "END".
+     * Used by PATTERNSCAN and MAPS. Returns the n lines.
+     */
+    fun requestMulti(cmd: String): List<String> = synchronized(lock) {
+        val w = writer ?: error("Engine not running")
+        val r = reader ?: error("Engine not running")
+        w.println(cmd)
+        val head = r.readLine() ?: error("engine closed")
+        if (!head.startsWith("OK")) error(head.removePrefix("ERR").trim())
+        val count = head.removePrefix("OK").trim().toIntOrNull() ?: 0
+        val out = ArrayList<String>(count)
+        repeat(count) {
+            val l = r.readLine() ?: return@repeat
+            out.add(l)
+        }
+        r.readLine() // "END"
+        out
+    }
+
     fun stop() {
         synchronized(lock) {
             try { writer?.println("QUIT") } catch (_: Throwable) {}

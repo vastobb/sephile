@@ -133,6 +133,14 @@ object Daemon {
                         synchronized(frozen) { frozen.clear() }
                         writer.println("OK")
                     }
+                    // AOB / signature scan: "PATTERNSCAN 48 89 5C 24 ?? 57 ..." (?? = wildcard).
+                    // Returns "OK <n>" then n hex addresses then "END".
+                    "PATTERNSCAN" -> {
+                        val pat = parts.drop(1).joinToString(" ")
+                        writePatternScan(writer, pat)
+                    }
+                    // Readable memory regions: "OK <n>" then "start-end perms" lines then "END".
+                    "MAPS" -> writeMaps(writer)
                     "LISTPROCS" -> writeProcesses(writer)
                     "QUIT" -> { writer.println("OK BYE"); break }
                     else -> writer.println("ERR unknown command $cmd")
@@ -333,6 +341,68 @@ object Daemon {
             }
         } catch (t: Throwable) { }
         return out
+    }
+
+    /**
+     * AOB / signature scan. Pattern is space-separated hex bytes with "??" as
+     * wildcard, e.g. "48 89 5C 24 ?? 57". Scans all readable regions for the
+     * sequence. Returns "OK <n>" then n hex addresses then "END" (capped).
+     */
+    private fun writePatternScan(writer: PrintStream, pattern: String) {
+        val toks = pattern.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (toks.isEmpty() || toks.size > 128) { writer.println("ERR bad pattern"); return }
+        val pat = IntArray(toks.size) { -1 }
+        for (i in toks.indices) {
+            val t = toks[i]
+            if (t == "??" || t == "?" || t == "*") { pat[i] = -1; continue }
+            val v = t.toIntOrNull(16) ?: run { writer.println("ERR bad byte '$t'"); return }
+            if (v !in 0..255) { writer.println("ERR bad byte '$t'"); return }
+            pat[i] = v
+        }
+        val minPat = pat.count { it >= 0 }
+        if (minPat == 0) { writer.println("ERR pattern is all wildcards"); return }
+
+        val hits = ArrayList<Long>()
+        val cap = 512
+        val chunk = 1024 * 1024
+        synchronized(stateLock) {
+            if (pid <= 0 || mem == null) { writer.println("ERR not attached"); return }
+            for (r in parseMaps(pid)) {
+                if (!r.readable) continue
+                var addr = r.start
+                while (addr + pat.size <= r.end && hits.size < cap) {
+                    val len = minOf(chunk.toLong(), r.end - addr).toInt()
+                    val buf = readAt(addr, len) ?: break
+                    var i = 0
+                    while (i + pat.size <= buf.size && hits.size < cap) {
+                        var ok = true
+                        for (j in pat.indices) {
+                            val p = pat[j]
+                            if (p >= 0 && (buf[i + j].toInt() and 0xFF) != p) { ok = false; break }
+                        }
+                        if (ok) hits.add(addr + i)
+                        i += 1
+                    }
+                    addr += len
+                }
+                if (hits.size >= cap) break
+            }
+        }
+        writer.println("OK ${hits.size}")
+        for (a in hits) writer.println("0x" + a.toString(16))
+        writer.println("END")
+    }
+
+    /** Readable memory regions: "OK <n>" then "start-end perms" lines then "END". */
+    private fun writeMaps(writer: PrintStream) {
+        val regions = synchronized(stateLock) { if (pid > 0) parseMaps(pid) else emptyList() }
+        val readable = regions.filter { it.readable }
+        writer.println("OK ${readable.size}")
+        for (r in readable) {
+            val perms = (if (r.readable) "r" else "-") + (if (r.writable) "w" else "-")
+            writer.println("${r.start.toString(16)}-${r.end.toString(16)} $perms")
+        }
+        writer.println("END")
     }
 
     private fun writeProcesses(writer: PrintStream) {

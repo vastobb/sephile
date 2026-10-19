@@ -51,11 +51,10 @@ class MainActivity : ComponentActivity() {
 }
 
 private enum class Tab(val label: String) {
-    Processes("Processes"),
-    Scanner("Scanner"),
-    Inspector("Inspector"),
-    Lua("Scripts"),
-    Overlay("Overlay")
+    Chat("AI"),
+    Scanner("Scan"),
+    Overlay("Overlay"),
+    Settings("Settings")
 }
 
 @Composable
@@ -68,8 +67,12 @@ private fun SephileApp(
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
 
-    var tab by remember { mutableStateOf(Tab.Processes) }
+    var tab by remember { mutableStateOf(Tab.Chat) }
     var targetPid by remember { mutableStateOf(-1) }
+
+    val chatVm = remember {
+        com.sephile.app.ai.ChatViewModel(memoryRepo, processRepo, context.applicationContext)
+    }
     var crashText by remember { mutableStateOf<String?>(null) }
 
     // Boot the root engine exactly once.
@@ -127,29 +130,10 @@ private fun SephileApp(
         ) { pad ->
             Box(Modifier.padding(pad)) {
                 when (tab) {
-                    Tab.Processes -> ProcessListScreen(
-                        repo = processRepo,
-                        memoryRepo = memoryRepo,
-                        onAttach = { pid, name ->
-                            scope.launch(Dispatchers.IO) {
-                                val ok = memoryRepo.attach(pid)
-                                scope.launch {
-                                    snackbar.showSnackbar(
-                                        if (ok) "Attached to $name (PID $pid)"
-                                        else "Attach refused by target"
-                                    )
-                                    if (ok) {
-                                        targetPid = pid
-                                        tab = Tab.Scanner
-                                    }
-                                }
-                            }
-                        }
-                    )
+                    Tab.Chat -> ChatScreen(chatVm)
                     Tab.Scanner -> ScannerScreen(repo = memoryRepo, fallbackPid = targetPid)
-                    Tab.Inspector -> LiveMemoryInspectorScreen(repo = memoryRepo)
-                    Tab.Lua -> ScriptEditorScreen(repo = luaRepo)
                     Tab.Overlay -> OverlayScreen()
+                    Tab.Settings -> SettingsScreen()
                 }
             }
         }
@@ -157,11 +141,10 @@ private fun SephileApp(
 }
 
 private fun tabIcon(t: Tab): String = when (t) {
-    Tab.Processes -> "🧩"
+    Tab.Chat -> "🤖"
     Tab.Scanner -> "🔎"
-    Tab.Inspector -> "🧬"
-    Tab.Lua -> "📜"
     Tab.Overlay -> "🧿"
+    Tab.Settings -> "⚙️"
 }
 
 @Composable
