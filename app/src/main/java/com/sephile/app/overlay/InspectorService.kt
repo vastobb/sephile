@@ -1,6 +1,7 @@
 package com.sephile.app.overlay
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -129,7 +130,9 @@ class InspectorService : AccessibilityService() {
     }
 
     private fun collect(node: AccessibilityNodeInfo, out: ArrayList<AccessibilityNodeInfo>) {
-        if (node.getBoundsInScreen(Rect()).let { it.width() > 0 && it.height() > 0 }) {
+        val r = Rect()
+        node.getBoundsInScreen(r)
+        if (r.width() > 0 && r.height() > 0) {
             out.add(node)
         }
         for (i in 0 until node.childCount) {
