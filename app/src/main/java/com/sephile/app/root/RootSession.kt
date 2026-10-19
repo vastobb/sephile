@@ -38,7 +38,7 @@ object RootSession {
     /** Spawn the daemon. Safe to call repeatedly; only one start runs at a time. */
     suspend fun start(context: Context): Boolean = withContext(Dispatchers.IO) {
         synchronized(lock) {
-            if (_state.value == SessionState.READY && process?.alive == true) return@withContext true
+            if (_state.value == SessionState.READY && process?.isAlive == true) return@withContext true
             if (starting) return@withContext false
             starting = true
             _state.value = SessionState.STARTING
