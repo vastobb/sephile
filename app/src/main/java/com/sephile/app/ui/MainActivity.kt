@@ -54,7 +54,8 @@ private enum class Tab(val label: String) {
     Processes("Processes"),
     Scanner("Scanner"),
     Inspector("Inspector"),
-    Lua("Scripts")
+    Lua("Scripts"),
+    Overlay("Overlay")
 }
 
 @Composable
@@ -148,6 +149,7 @@ private fun SephileApp(
                     Tab.Scanner -> ScannerScreen(repo = memoryRepo, fallbackPid = targetPid)
                     Tab.Inspector -> LiveMemoryInspectorScreen(repo = memoryRepo)
                     Tab.Lua -> ScriptEditorScreen(repo = luaRepo)
+                    Tab.Overlay -> OverlayScreen()
                 }
             }
         }
@@ -159,6 +161,7 @@ private fun tabIcon(t: Tab): String = when (t) {
     Tab.Scanner -> "🔎"
     Tab.Inspector -> "🧬"
     Tab.Lua -> "📜"
+    Tab.Overlay -> "🧿"
 }
 
 @Composable

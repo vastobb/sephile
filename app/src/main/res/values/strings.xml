@@ -40,4 +40,15 @@
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
     <string name="theme_system">System</string>
+
+    <!-- Overlay / layout inspector -->
+    <string name="accessibility_description">Lets Sephile read the foreground app\'s view layout so the floating inspector can draw boundaries on each element and show its text, id and bounds. Nothing is sent anywhere; it only reads the on-screen UI of apps you are currently using.</string>
+    <string name="screen_overlay">Overlay</string>
+    <string name="overlay_title">Layout inspector</string>
+    <string name="overlay_desc">Draws boundaries on every UI element of the foreground app and lets you tap one to see its text, id, bounds and supported actions (click / set text on editable fields).</string>
+    <string name="overlay_grant_overlay">Grant \"Display over other apps\"</string>
+    <string name="overlay_enable_accessibility">Enable accessibility service</string>
+    <string name="overlay_start">Start floating overlay</string>
+    <string name="overlay_stop">Stop overlay</string>
+    <string name="overlay_boundary_note">Works on normal Android apps. Games that render their own UI in OpenGL (e.g. Minecraft) expose no view tree, so only the full-screen surface is visible there.</string>
 </resources>
