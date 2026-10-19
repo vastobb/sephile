@@ -298,8 +298,8 @@ object Daemon {
         SHORT -> toLE(intVal, 2)
         DWORD -> toLE(intVal, 4)
         QWORD -> toLE(intVal, 8)
-        FLOAT -> toLE(Float.floatToRawBits(floatVal.toFloat()).toLong(), 4)
-        DOUBLE -> toLE(Double.doubleToRawBits(floatVal), 8)
+        FLOAT -> toLE(floatVal.toFloat().toRawBits().toLong(), 4)
+        DOUBLE -> toLE(floatVal.toRawBits(), 8)
         else -> toLE(intVal, 4)
     }
 
