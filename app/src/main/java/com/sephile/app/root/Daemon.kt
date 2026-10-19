@@ -2,9 +2,11 @@ package com.sephile.app.root
 
 import java.io.BufferedReader
 import java.io.File
+import java.io.FileDescriptor
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.InputStreamReader
-import java.io.OutputStreamWriter
-import java.io.PrintWriter
+import java.io.PrintStream
 import java.io.RandomAccessFile
 
 /**
@@ -46,7 +48,12 @@ object Daemon {
 
     @JvmStatic
     fun main(args: Array<String>) {
-        System.out.println("OK SEPHILE_DAEMON_1 uid=${android.os.Process.myUid()}")
+        // Speak over raw fd 0/1: app_process may redirect System.out to logcat,
+        // which would swallow this protocol. fd1 is the client's pipe, fd0 its commands.
+        val reader = BufferedReader(InputStreamReader(FileInputStream(FileDescriptor.`in`)))
+        val writer = PrintStream(FileOutputStream(FileDescriptor.out), true)
+
+        writer.println("OK SEPHILE_DAEMON_1 uid=${android.os.Process.myUid()}")
 
         // Freeze loop: re-apply frozen values ~10x/sec.
         freezeRunning = true
@@ -62,9 +69,6 @@ object Daemon {
                 try { Thread.sleep(100) } catch (_: InterruptedException) { break }
             }
         }.apply { isDaemon = true; start() }
-
-        val reader = BufferedReader(InputStreamReader(System.`in`))
-        val writer = PrintWriter(OutputStreamWriter(System.out), true)
 
         while (true) {
             val line = try { reader.readLine() } catch (t: Throwable) { null } ?: break
@@ -324,7 +328,7 @@ object Daemon {
         return out
     }
 
-    private fun writeProcesses(writer: PrintWriter) {
+    private fun writeProcesses(writer: PrintStream) {
         val procs = ArrayList<String>()
         val entries = File("/proc").list() ?: emptyArray()
         for (e in entries) {
