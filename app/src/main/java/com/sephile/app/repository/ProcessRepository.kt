@@ -43,7 +43,7 @@ class ProcessRepository(private val context: Context) {
     private fun fromPsFallback(): List<ProcessInfo> {
         val res = SuShell.run("ps -A 2>/dev/null")
         if (!res.success && res.stdout.isEmpty()) return emptyList()
-        return res.stdout.lineSequence().mapNotNull { line ->
+        return res.stdout.lines().mapNotNull { line ->
             val cols = line.trim().split(Regex("\\s+"))
             // toybox ps -A: USER PID PPID VSZ RSS WCHAN ADDR S NAME
             if (cols.size < 9) return@mapNotNull null

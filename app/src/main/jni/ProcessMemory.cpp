@@ -71,12 +71,13 @@ std::vector<MemoryRegion> ProcessMemory::enumerateRegions() const {
     std::string line;
     while (std::getline(maps, line)) {
         MemoryRegion r;
-        unsigned long start, end, offset, major, minor;
+        unsigned long long start, end, offset;
+        unsigned int major, minor;
         char perms[5] = {0};
         char pathname[4096] = {0};
         int inode = 0;
 
-        int n = sscanf(line.c_str(), "%lx-%lx %4s %lx %x:%x %d %4095s",
+        int n = sscanf(line.c_str(), "%llx-%llx %4s %llx %x:%x %d %4095s",
                        &start, &end, perms, &offset, &major, &minor, &inode, pathname);
         if (n < 7) continue;
 

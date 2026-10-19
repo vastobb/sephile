@@ -186,8 +186,8 @@ internal fun interpret(hexDump: String, type: ValueType): String {
         ValueType.SHORT -> le.toShort().toString()
         ValueType.DWORD -> le.toInt().toString()
         ValueType.QWORD -> le.toString()
-        ValueType.FLOAT -> java.lang.Float.fromBits(le.toInt()).toString()
-        ValueType.DOUBLE -> java.lang.Double.fromBits(le).toString()
+        ValueType.FLOAT -> Float.fromBits(le.toInt()).toString()
+        ValueType.DOUBLE -> Double.fromBits(le).toString()
     }
 }
 
