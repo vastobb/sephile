@@ -99,11 +99,31 @@ is why the app "still crashed no matter what":
 ## 7. Design consequences (this rewrite)
 
 - App process **never** calls `ptrace`. All engine work happens in the daemon.
-- `root/Daemon.kt` — `main()` entrypoint, owns the native `MemoryScanner`,
-  serves a text command protocol over stdin/stdout.
+- `root/Daemon.kt` — `main()` entrypoint, speaks a text command protocol over
+  stdin/stdout.
 - `root/RootSession.kt` — client side: spawns the daemon via `su`, speaks the
   protocol, exposes a `StateFlow<SessionState>` (disconnected / starting /
   ready / error) so the UI can show real engine status.
-- The native C++ engine (`MemoryScanner`, `ProcessMemory`) is unchanged — it
-  works correctly; it was simply being driven from the wrong process.
 - UI keeps its four-tab Compose structure but sources all data from `RootSession`.
+
+## 8. Why the engine is pure-JVM (not the native `.so`)
+
+An earlier draft had the daemon `System.load()` the native `libsephile_jni.so`.
+That failed on-device with *"Native library missing …/lib/arm64/libsephile_jni.so"*,
+and two further risks lay behind it:
+
+1. **Extraction** — AGP 8 defaults `useLegacyPackaging=false` (minSdk ≥ 23), so
+   `.so` files are *not* extracted to `nativeLibraryDir`; the dir is empty.
+   (`android:extractNativeLibs=true` / `useLegacyPackaging=true` fixes this.)
+2. **Linker namespace** — even the extracted copy may be unloadable: `app_process`
+   runs in the default linker namespace, which can reject `dlopen` of paths under
+   `/data/app` or `/data/data` with *"library is not accessible for the namespace"*.
+   This is device/config dependent and untestable from here.
+
+Both are avoidable. **Reading `/proc/<pid>/mem` as root needs only that file** —
+its `open()` performs a `PTRACE_MODE_ATTACH` check that root passes (uid 0 +
+`CAP_SYS_PTRACE` bypass Yama; the su/magisk SELinux domain allows ptrace). No
+ptrace call, no native lib, no extraction, no dlopen, no W^X. So the daemon is
+now **pure JVM**: it parses `/proc/<pid>/maps` for regions and reads/writes
+`/proc/<pid>/mem` with `RandomAccessFile`. The `jni/` sources and C++ engine are
+kept but not built or packaged (an optional future accelerator).

@@ -15,11 +15,9 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        externalNativeBuild {
-            cmake {
-                abiFilters("arm64-v8a", "armeabi-v7a", "x86_64")
-            }
-        }
+        // No native build: the root engine daemon is pure JVM reading
+        // /proc/<pid>/mem as root (RESEARCH.md). The jni/ sources remain for a
+        // future optional native accelerator but are not built or packaged.
     }
 
     buildTypes {
@@ -56,23 +54,8 @@ android {
     }
 
     packaging {
-        jniLibs {
-            // Extract .so files to nativeLibraryDir (extractNativeLibs=true).
-            // The root daemon loads the engine via System.load(absolutePath) in
-            // app_process, which needs the .so on real filesystem — AGP 8's
-            // default (useLegacyPackaging=false) keeps libs inside the APK and
-            // leaves nativeLibraryDir empty.
-            useLegacyPackaging = true
-        }
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
-
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/jni/CMakeLists.txt")
-            version = "3.22.1"
         }
     }
 }

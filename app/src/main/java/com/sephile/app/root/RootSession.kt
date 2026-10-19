@@ -47,11 +47,8 @@ object RootSession {
         try {
             val app = context.applicationInfo
             val apk = app.sourceDir
-            val lib = resolveLib(context)
-            if (lib == null) {
-                fail("Native lib not found. Tried ${app.nativeLibraryDir}/libsephile_jni.so (not extracted) and APK entry lib/*/libsephile_jni.so")
-                return@withContext false
-            }
+            // The daemon is pure JVM (reads /proc/<pid>/mem as root) — no native
+            // .so to extract or dlopen, so no library path is needed.
 
             val p = Runtime.getRuntime().exec("su")
             val w = PrintWriter(OutputStreamWriter(p.outputStream), true)
@@ -70,7 +67,7 @@ object RootSession {
             // Hand off stdin/stdout to app_process. `exec` keeps the same fds so
             // our pipes connect straight to the daemon.
             w.println("export CLASSPATH=$apk")
-            w.println("exec /system/bin/app_process /system/bin com.sephile.app.root.Daemon $lib")
+            w.println("exec /system/bin/app_process /system/bin com.sephile.app.root.Daemon")
 
             // Handshake: read until the daemon banner (skip any su noise).
             var ready = false
@@ -140,41 +137,6 @@ object RootSession {
         }
         val end = r.readLine() // "END"
         out
-    }
-
-    /**
-     * Locate libsephile_jni.so for [System.load] inside the daemon.
-     *
-     * Primary: the extracted copy under `nativeLibraryDir` (present only when
-     * extractNativeLibs / useLegacyPackaging = true — the canonical, dlopen-able
-     * location). Fallback: unzip the .so straight out of the base APK into
-     * cacheDir, in case a build/device didn't extract libs.
-     */
-    private fun resolveLib(context: Context): String? {
-        val app = context.applicationInfo
-        val primary = java.io.File(app.nativeLibraryDir, "libsephile_jni.so")
-        if (primary.exists()) return primary.absolutePath
-        return try {
-            val abi = android.os.Build.SUPPORTED_ABIS.firstOrNull() ?: "arm64-v8a"
-            val out = java.io.File(context.cacheDir, "sephile_engine.so")
-            if (!out.exists() || out.length() == 0L) {
-                val zip = java.util.zip.ZipFile(app.sourceDir)
-                val entry = zip.getEntry("lib/$abi/libsephile_jni.so")
-                    ?: zip.entries().toList().firstOrNull { it.name.endsWith("libsephile_jni.so") }
-                if (entry == null) {
-                    zip.close()
-                    return null
-                }
-                zip.getInputStream(entry).use { ins ->
-                    out.outputStream().use { ins.copyTo(it) }
-                }
-                zip.close()
-                out.setExecutable(true, false)
-            }
-            if (out.exists() && out.length() > 0L) out.absolutePath else null
-        } catch (t: Throwable) {
-            null
-        }
     }
 
     fun stop() {
