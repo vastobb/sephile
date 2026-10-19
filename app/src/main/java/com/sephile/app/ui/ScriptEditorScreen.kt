@@ -34,9 +34,9 @@ private class ScriptViewModel(private val repo: LuaRepository) {
     val ui = MutableStateFlow(
         ScriptUiState(
             output = if (repo.engineAvailable)
-                "Lua console ready."
+                "Script engine ready — type commands like: attach 1234 / scan 100 / list"
             else
-                "Native engine unavailable.\n${NativeBridgeStatus.text}"
+                "Root engine not running. Grant superuser, then retry."
         )
     )
 
@@ -58,22 +58,19 @@ private class ScriptViewModel(private val repo: LuaRepository) {
     }
 }
 
-/** Indirection so the editor file compiles even before Lua sources are vendored. */
-private object NativeBridgeStatus {
-    val text: String
-        get() = "Lua scripting needs the native engine. Vendor lua-5.4 sources into " +
-            "app/src/main/jni/lua/ and rebuild to enable it."
-}
-
+/** Background scope for running scripts off the UI thread. */
 private val RunScope = kotlinx.coroutines.CoroutineScope(
     kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
 )
 
-private val DEFAULT_SCRIPT = """-- Sephile Lua console
--- Examples (once the Lua engine is bound):
---   mempoke(0x7FA50000, 100)      -- write a 4-byte value
---   print(mempeek(0x7FA50000))    -- read it back
-print("hello from sephile")
+private val DEFAULT_SCRIPT = """# Sephile command script
+# Runs against the root engine, line by line.
+# Commands: attach <pid> / detach / list / scan <val> [type] / next <val> / peek <addrHex> <len> / poke <addrHex> <val> [type] / count
+list
+# attach 1234
+# scan 100 dword
+# next 120
+# poke 0x7FA50000 999 dword
 """
 
 @Composable
@@ -85,7 +82,7 @@ fun ScriptEditorScreen(repo: LuaRepository) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "Lua scripting",
+                text = "Command scripts",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )

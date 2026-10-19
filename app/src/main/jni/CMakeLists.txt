@@ -26,7 +26,10 @@ add_library(sephile_jni SHARED
 target_link_libraries(sephile_jni
     ${log-lib}
     ${android-lib}
-    c++_shared
+    # Static C++ runtime so the .so is self-contained. The engine is loaded via
+    # System.load(absolutePath) from an app_process daemon, where libc++_shared.so
+    # is NOT on the library search path — a shared runtime would fail to resolve.
+    c++_static
 )
 
 # Set output name & visibility

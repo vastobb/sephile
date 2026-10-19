@@ -10,20 +10,22 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.sephile.app.di.Module
 import com.sephile.app.repository.LuaRepository
 import com.sephile.app.repository.MemoryRepository
 import com.sephile.app.repository.ProcessRepository
-import com.sephile.app.root.RootManager
+import com.sephile.app.root.RootSession
+import com.sephile.app.root.SessionState
 import com.sephile.app.ui.theme.SephileTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
-    private val processRepo = Module.processRepository(this)
+    private val processRepo = Module.processRepository()
     private val memoryRepo = Module.memoryRepository()
     private val luaRepo = Module.luaRepository()
 
@@ -52,7 +54,7 @@ private enum class Tab(val label: String) {
     Processes("Processes"),
     Scanner("Scanner"),
     Inspector("Inspector"),
-    Lua("Lua")
+    Lua("Scripts")
 }
 
 @Composable
@@ -61,30 +63,53 @@ private fun SephileApp(
     memoryRepo: MemoryRepository,
     luaRepo: LuaRepository
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
 
-    var gateDone by remember { mutableStateOf(false) }
-    var rooted by remember { mutableStateOf(false) }
     var tab by remember { mutableStateOf(Tab.Processes) }
     var targetPid by remember { mutableStateOf(-1) }
-    var targetName by remember { mutableStateOf("") }
+    var crashText by remember { mutableStateOf<String?>(null) }
 
+    // Boot the root engine exactly once.
     LaunchedEffect(Unit) {
-        rooted = RootManager.isRootAvailableAsync()
-        gateDone = true
+        crashText = com.sephile.app.SephileApp.lastCrash(context.filesDir)
+        RootSession.start(context)
     }
 
-    when {
-        !gateDone -> GateLoading()
-        !rooted -> RootGate(onRecheck = {
-            scope.launch {
-                gateDone = false
-                rooted = RootManager.isRootAvailableAsync()
-                gateDone = true
+    val sessionState by RootSession.state.collectAsState()
+    val sessionDetail by RootSession.detail.collectAsState()
+
+    crashText?.let { text ->
+        AlertDialog(
+            onDismissRequest = {
+                com.sephile.app.SephileApp.clearCrash(context.filesDir)
+                crashText = null
+            },
+            title = { Text("The app crashed last run") },
+            text = {
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    com.sephile.app.SephileApp.clearCrash(context.filesDir)
+                    crashText = null
+                }) { Text("Dismiss") }
             }
-        })
-        else -> Scaffold(
+        )
+    }
+
+    when (sessionState) {
+        SessionState.STARTING -> GateLoading(sessionDetail)
+        SessionState.DISCONNECTED, SessionState.ERROR -> EngineGate(
+            detail = sessionDetail,
+            onRetry = { scope.launch(Dispatchers.IO) { RootSession.start(context) } }
+        )
+        SessionState.READY -> Scaffold(
             snackbarHost = { SnackbarHost(hostState = snackbar) },
             bottomBar = {
                 NavigationBar {
@@ -110,21 +135,17 @@ private fun SephileApp(
                                 scope.launch {
                                     snackbar.showSnackbar(
                                         if (ok) "Attached to $name (PID $pid)"
-                                        else "Attach failed — grant root (Magisk/KernelSU) and retry"
+                                        else "Attach refused by target"
                                     )
                                     if (ok) {
                                         targetPid = pid
-                                        targetName = name
                                         tab = Tab.Scanner
                                     }
                                 }
                             }
                         }
                     )
-                    Tab.Scanner -> ScannerScreen(
-                        repo = memoryRepo,
-                        fallbackPid = targetPid
-                    )
+                    Tab.Scanner -> ScannerScreen(repo = memoryRepo, fallbackPid = targetPid)
                     Tab.Inspector -> LiveMemoryInspectorScreen(repo = memoryRepo)
                     Tab.Lua -> ScriptEditorScreen(repo = luaRepo)
                 }
@@ -141,17 +162,24 @@ private fun tabIcon(t: Tab): String = when (t) {
 }
 
 @Composable
-private fun GateLoading() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+private fun GateLoading(detail: String) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = "Checking root…", color = Color(0xFF9AA0A6))
+        CircularProgressIndicator()
+        Spacer(Modifier.height(16.dp))
+        Text(text = "Starting root engine…", color = MaterialTheme.colorScheme.onBackground)
+        if (detail.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Text(text = detail, style = MaterialTheme.typography.bodySmall, color = Color(0xFF9AA0A6))
+        }
     }
 }
 
 @Composable
-private fun RootGate(onRecheck: () -> Unit) {
+private fun EngineGate(detail: String, onRetry: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -160,24 +188,38 @@ private fun RootGate(onRecheck: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = "🔒", style = MaterialTheme.typography.displayLarge)
+        Text(text = "🔐", style = MaterialTheme.typography.displayLarge)
         Spacer(Modifier.height(16.dp))
         Text(
-            text = "Root required",
+            text = "Root engine needed",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onBackground
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            text = "Sephile attaches to other apps' memory with ptrace — that needs root.\n\n" +
-                "1. Install Magisk / KernelSU / APatch on your device.\n" +
-                "2. Open the root manager, grant Sephile superuser.\n" +
-                "3. Tap re-check below.",
+            text = "Sephile reads game memory from a root daemon (uid 0), because an " +
+                "app process is blocked by SELinux/Yama from touching other apps.\n\n" +
+                "Grant Sephile superuser in Magisk / KernelSU / APatch, then retry.",
             style = MaterialTheme.typography.bodyMedium,
             color = Color(0xFF9AA0A6),
             textAlign = TextAlign.Center
         )
+        if (detail.isNotBlank()) {
+            Spacer(Modifier.height(16.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = detail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+        }
         Spacer(Modifier.height(24.dp))
-        Button(onClick = onRecheck) { Text(text = "Re-check root") }
+        Button(onClick = onRetry) { Text(text = "Retry / request root") }
     }
 }
