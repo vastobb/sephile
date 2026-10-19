@@ -15,12 +15,17 @@ object Llm {
         return x
     }
 
+    /** Bearer tokens never contain whitespace. A pasted key often carries a stray
+     *  newline/space (0x0a) that makes HttpURLConnection reject the header, so
+     *  strip ALL whitespace before building the Authorization value. */
+    private fun sanKey(k: String) = k.filterNot { it.isWhitespace() }
+
     /** GET /models → model ids. Throws with a readable message on failure. */
     fun fetchModels(baseUrl: String, apiKey: String): List<String> {
         val b = base(baseUrl); require(b.isNotEmpty()) { "Enter a base URL" }
         val conn = (URL("$b/models").openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"; connectTimeout = 20_000; readTimeout = 20_000
-            setRequestProperty("Authorization", "Bearer $apiKey")
+            setRequestProperty("Authorization", "Bearer ${sanKey(apiKey)}")
             setRequestProperty("Accept", "application/json")
         }
         val code = conn.responseCode
@@ -43,7 +48,7 @@ object Llm {
         }
         val conn = (URL("$b/chat/completions").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"; connectTimeout = 60_000; readTimeout = 120_000; doOutput = true
-            setRequestProperty("Authorization", "Bearer $apiKey")
+            setRequestProperty("Authorization", "Bearer ${sanKey(apiKey)}")
             setRequestProperty("Content-Type", "application/json")
         }
         conn.outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
