@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Splash window background. Uses <item android:drawable> (not <bitmap>) so
+     it works with shape/vector launcher icons. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/sephile_dark" />
-    <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/ic_launcher" />
-    </item>
+    <item
+        android:drawable="@mipmap/ic_launcher"
+        android:gravity="center" />
 </layer-list>
