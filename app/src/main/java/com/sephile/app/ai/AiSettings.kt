@@ -13,12 +13,12 @@ object AiSettings {
     fun key(c: Context) = (p(c).getString("key", "") ?: "").filterNot { it.isWhitespace() }
     fun setKey(c: Context, v: String) { p(c).edit().putString("key", v.filterNot { it.isWhitespace() }).apply() }
 
-    fun base(c: Context) = (p(c).getString("base", "https://api.openai.com") ?: "").trim()
+    fun base(c: Context) = (p(c).getString("base", "") ?: "").trim()
     fun setBase(c: Context, v: String) { p(c).edit().putString("base", v.trim()).apply() }
 
     fun model(c: Context) = (p(c).getString("model", "") ?: "").trim()
     fun setModel(c: Context, v: String) { p(c).edit().putString("model", v.trim()).apply() }
 
-    fun pkg(c: Context) = (p(c).getString("pkg", "com.mojang.minecraftpe") ?: "com.mojang.minecraftpe").trim()
+    fun pkg(c: Context) = (p(c).getString("pkg", "") ?: "").trim()
     fun setPkg(c: Context, v: String) { p(c).edit().putString("pkg", v.trim()).apply() }
 }
