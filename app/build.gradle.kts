@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    id("org.jetbrains.kotlin.plugin.compose") version "2.0.20"
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -15,9 +15,6 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // No native build: the root engine daemon is pure JVM reading
-        // /proc/<pid>/mem as root (RESEARCH.md). The jni/ sources remain for a
-        // future optional native accelerator but are not built or packaged.
     }
 
     buildTypes {
@@ -28,7 +25,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
         }
         debug {
             isDebuggable = true
@@ -36,21 +32,17 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
     }
 
     buildFeatures {
         buildConfig = true
         compose = true
-    }
-
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.6.10"
     }
 
     packaging {

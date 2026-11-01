@@ -1,15 +1,21 @@
 name: Build Sephile (Debug APK)
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - master
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
+      - master
 
 jobs:
   build:
+    name: Build APK
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
 
     steps:
       - name: Checkout repository
@@ -18,56 +24,37 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: zulu
-          java-version: 17
+          distribution: temurin
+          java-version: "17"
           cache: gradle
 
-      - name: Install Android command-line tools
-        run: |
-          mkdir -p $HOME/android-sdk/cmdline-tools
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdline-tools.zip
-          unzip -q -o /tmp/cmdline-tools.zip -d $HOME/android-sdk/cmdline-tools
-          mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
-          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Accept Android SDK licenses
-        run: |
-          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+        run: yes | sdkmanager --licenses || true
 
-      - name: Install Android SDK platforms, build-tools, NDK
+      - name: Install required Android SDK components
         run: |
-          sdkmanager "platforms;android-34" "build-tools;34.0.0" "ndk;27.0.12077973"
-
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts', '**/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Install Gradle 8.10
-        run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.10-bin.zip -O /tmp/gradle.zip
-          unzip -q -o /tmp/gradle.zip -d $HOME
-          echo "$HOME/gradle-8.10/bin" >> $GITHUB_PATH
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "ndk;27.0.12077973"
 
       - name: Build debug APK
-        run: gradle :app:assembleDebug --no-daemon --console=plain
+        run: ./gradlew :app:assembleDebug --no-daemon --console=plain
 
-      - name: Run lint (debug)
-        run: gradle :app:lintDebug --no-daemon --console=plain || true
+      - name: Run lint
+        run: ./gradlew :app:lintDebug --no-daemon --console=plain || true
 
       - name: Run unit tests
-        run: gradle :app:testDebugUnitTest --no-daemon --console=plain || true
+        run: ./gradlew :app:testDebugUnitTest --no-daemon --console=plain || true
 
       - name: Upload debug APK artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: sephile-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 7
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
